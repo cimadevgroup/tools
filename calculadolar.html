@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Calculadolar 🇻🇪</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { background-color: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; overflow: hidden; margin: 0; }
+        
+        .scene { perspective: 1000px; width: 100%; max-width: 375px; height: 740px; position: relative; }
+        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1); transform-style: preserve-3d; }
+        .card-inner.flipped { transform: rotateY(180deg); }
+        
+        .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 40px; overflow: hidden; border: 1px solid #333; background: #000; }
+        .card-back { transform: rotateY(180deg); background-color: #121212; display: flex; flex-direction: column; }
+        
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .ios-btn:active { transform: scale(0.95); opacity: 0.8; }
+        .mini-btn:active { background-color: #555 !important; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        /* Reducir espacios */
+        .content-compact { gap: 0.5rem !important; padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+        .mini-calc-compact { margin-top: 0.5rem !important; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-black">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const [isFlipped, setIsFlipped] = useState(false);
+            
+            // Estado calculadoras
+            const [mainDisp, setMainDisp] = useState('0');
+            const [mainWait, setMainWait] = useState(false);
+            const [mainOp, setMainOp] = useState(null);
+            const [mainVal, setMainVal] = useState(null);
+
+            const [miniDisp, setMiniDisp] = useState('0');
+            const [miniWait, setMiniWait] = useState(false);
+            const [miniOp, setMiniOp] = useState(null);
+            const [miniVal, setMiniVal] = useState(null);
+
+            // Datos
+            const [loading, setLoading] = useState(false);
+            const [rates, setRates] = useState({ bcv: null, paralelo: null });
+            
+            const [inputs, setInputs] = useState({
+                priceDollar: '',
+                payAmount: '',
+                currency: 'Bs', 
+                customBcv: '',
+                customParalelo: ''
+            });
+
+            // Log
+            const [log, setLog] = useState([]);
+            const [showLog, setShowLog] = useState(false);
+            
+            // Fetch simplificado (solo BCV y Paralelo)
+            const fetchRates = async () => {
+                setLoading(true);
+                setInputs(prev => ({...prev, customBcv: '', customParalelo: ''}));
+
+                try {
+                    const r1 = await fetch('https://ve.dolarapi.com/v1/dolares');
+                    if(r1.ok) {
+                        const data = await r1.json();
+                        const bcv = data.find(d => d.fuente === 'oficial')?.promedio || null;
+                        const paralelo = data.find(d => d.fuente === 'paralelo')?.promedio || null;
+                        setRates({ bcv, paralelo });
+                    }
+                } catch (e) {
+                    console.error("Error API", e);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => { fetchRates(); }, []);
+
+            // Camuflaje
+            useEffect(() => {
+                if (mainDisp === '676767') {
+                    setTimeout(() => {
+                        setIsFlipped(true);
+                        setMainDisp('0'); setMainVal(null); setMainOp(null);
+                    }, 200);
+                }
+            }, [mainDisp]);
+
+            // Cálculos
+            const activeBcv = inputs.customBcv ? parseFloat(inputs.customBcv) : rates.bcv;
+            const activePar = inputs.customParalelo ? parseFloat(inputs.customParalelo) : rates.paralelo;
+            const basePrice = parseFloat(inputs.priceDollar);
+            const payAmount = parseFloat(inputs.payAmount);
+
+            const infoBase = basePrice > 0 ? (
+                <div className="flex flex-col gap-0.5 mt-1 text-[9px] font-mono text-gray-500">
+                    <div className="flex justify-between"><span>Oficial:</span> <span className="text-gray-300 font-bold">Bs {(basePrice * activeBcv).toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Paralelo:</span> <span className="text-gray-300 font-bold">Bs {(basePrice * activePar).toFixed(2)}</span></div>
+                </div>
+            ) : <div className="mt-1 text-[9px] text-gray-600 italic">Ingresa precio...</div>;
+
+            const infoPay = payAmount > 0 ? (
+                inputs.currency === 'Bs' ? (
+                    <div className="flex flex-col gap-0.5 mt-1 text-[9px] font-mono text-gray-500">
+                        <div className="flex justify-between"><span>Si fuera BCV:</span> <span className="text-gray-300 font-bold">${(payAmount / activeBcv).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>Si fuera Par:</span> <span className="text-gray-300 font-bold">${(payAmount / activePar).toFixed(2)}</span></div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-0.5 mt-1 text-[9px] font-mono text-gray-500">
+                        <div className="flex justify-between"><span>A tasa BCV:</span> <span className="text-gray-300 font-bold">Bs {(payAmount * activeBcv).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>A tasa Par:</span> <span className="text-gray-300 font-bold">Bs {(payAmount * activePar).toFixed(2)}</span></div>
+                    </div>
+                )
+            ) : <div className="mt-1 text-[9px] text-gray-600 italic">Ingresa monto...</div>;
+
+            // Semáforo
+            let tasaImp = 0;
+            let status = { text: 'ESPERANDO', color: 'text-gray-500', bg: 'bg-gray-800' };
+            
+            if (basePrice > 0 && payAmount > 0) {
+                if (inputs.currency === 'Bs') {
+                    tasaImp = payAmount / basePrice;
+                } else {
+                    tasaImp = (payAmount / basePrice) * activeBcv;
+                }
+
+                if (tasaImp <= activeBcv * 1.01) status = { text: 'EXCELENTE (OFICIAL)', color: 'text-green-400', bg: 'bg-green-900/30 border border-green-600' };
+                else if (tasaImp >= activePar * 0.99) status = { text: 'ALERTA: PARALELO', color: 'text-red-400', bg: 'bg-red-900/30 border border-red-600' };
+                else status = { text: 'TASA MIXTA / INFLADA', color: 'text-yellow-400', bg: 'bg-yellow-900/30 border border-yellow-600' };
+            }
+
+            // Log mejorado con timestamp completo
+            const saveLog = () => {
+                if(tasaImp > 0) {
+                    const now = new Date();
+                    const newEntry = {
+                        id: Date.now(), 
+                        timestamp: now.toLocaleString('es-VE', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        }),
+                        bcv: activeBcv.toFixed(2),
+                        paralelo: activePar.toFixed(2),
+                        priceDollar: basePrice.toFixed(2),
+                        priceInBcv: (basePrice * activeBcv).toFixed(2),
+                        priceInPar: (basePrice * activePar).toFixed(2),
+                        payAmount: payAmount.toFixed(2),
+                        currency: inputs.currency,
+                        payInBcv: inputs.currency === 'Bs' ? (payAmount / activeBcv).toFixed(2) : (payAmount * activeBcv).toFixed(2),
+                        payInPar: inputs.currency === 'Bs' ? (payAmount / activePar).toFixed(2) : (payAmount * activePar).toFixed(2),
+                        rate: tasaImp.toFixed(2), 
+                        status: status.text
+                    };
+                    setLog([newEntry, ...log]);
+                    
+                    const btn = document.getElementById('logIcon');
+                    if(btn) {
+                        btn.style.color = '#2ecc71';
+                        setTimeout(() => btn.style.color = 'white', 1000);
+                    }
+                }
+            };
+
+            // Copiar log al portapapeles
+            const copyToClipboard = (entry) => {
+                const text = `📊 CALCULADOLAR - Registro de Cálculo
+
+📅 Fecha: ${entry.timestamp}
+
+💵 TASAS USADAS:
+• BCV Oficial: ${entry.bcv} Bs/$
+• Paralelo: ${entry.paralelo} Bs/$
+
+🛒 PRECIO BASE (en dólares):
+• Monto: ${entry.priceDollar}
+• A tasa BCV: Bs ${entry.priceInBcv}
+• A tasa Paralelo: Bs ${entry.priceInPar}
+
+💰 MONTO PAGADO:
+• Pagado: ${entry.currency} ${entry.payAmount}
+${entry.currency === 'Bs' ? 
+`• Equivale a (BCV): ${entry.payInBcv}
+• Equivale a (Par): ${entry.payInPar}` : 
+`• A tasa BCV: Bs ${entry.payInBcv}
+• A tasa Paralelo: Bs ${entry.payInPar}`}
+
+⚡ TASA IMPLÍCITA: ${entry.rate} Bs/$
+🚦 EVALUACIÓN: ${entry.status}`;
+
+                navigator.clipboard.writeText(text).then(() => {
+                    // Feedback visual
+                    const btn = document.getElementById(`copy-${entry.id}`);
+                    if(btn) {
+                        btn.style.color = '#2ecc71';
+                        setTimeout(() => btn.style.color = 'white', 1500);
+                    }
+                });
+            };
+
+            // Calculadoras
+            const doMath = (disp, setDisp, wait, setWait, op, setOp, val, setVal, input) => {
+                if(typeof input === 'number' || input === '.') {
+                    if(wait) {
+                        setDisp(String(input));
+                        setWait(false);
+                    } else {
+                        setDisp(disp === '0' && input !== '.' ? String(input) : disp + input);
+                    }
+                } else if (['+','-','*','/'].includes(input)) {
+                    const curr = parseFloat(disp);
+                    if(val === null) {
+                        setVal(curr);
+                    } else if(op) {
+                        const res = op==='+'?val+curr : op==='-'?val-curr : op==='*'?val*curr : val/curr;
+                        setVal(res);
+                        setDisp(String(res));
+                    }
+                    setWait(true);
+                    setOp(input);
+                } else if (input === '=') {
+                    if(op && val !== null) {
+                        const curr = parseFloat(disp);
+                        const res = op==='+'?val+curr : op==='-'?val-curr : op==='*'?val*curr : val/curr;
+                        setVal(null);
+                        setOp(null);
+                        setDisp(String(res));
+                        setWait(true);
+                    }
+                } else if (input === 'AC') {
+                    setDisp('0'); setVal(null); setOp(null); setWait(false);
+                }
+            };
+
+            const handleMain = (x) => doMath(mainDisp, setMainDisp, mainWait, setMainWait, mainOp, setMainOp, mainVal, setMainVal, x);
+            const handleMini = (x) => doMath(miniDisp, setMiniDisp, miniWait, setMiniWait, miniOp, setMiniOp, miniVal, setMiniVal, x);
+
+            return (
+                <div className="scene">
+                    <div className={`card-inner ${isFlipped ? 'flipped' : ''}`}>
+                        
+                        {/* Vista Frontal */}
+                        <div className="card-face bg-black text-white p-5 flex flex-col justify-end">
+                            <div className="flex-1 flex items-end justify-end px-2 mb-6"><span className="text-7xl font-light truncate">{mainDisp}</span></div>
+                            <div className="grid grid-cols-4 gap-3 mb-8">
+                                {['AC','+/-','%','/','7','8','9','*','4','5','6','-','1','2','3','+'].map(btn => (
+                                    <button key={btn} onClick={() => handleMain(btn === 'AC' ? 'AC' : isNaN(btn) ? btn : parseInt(btn))} className={`h-16 rounded-full text-2xl font-medium ios-btn ${['/','*','-','+'].includes(btn) ? 'bg-[#ff9f0a]' : ['AC','+/-','%'].includes(btn) ? 'bg-[#a5a5a5] text-black' : 'bg-[#333]'}`}>
+                                        {btn}
+                                    </button>
+                                ))}
+                                <button onClick={() => handleMain(0)} className="col-span-2 h-16 rounded-full bg-[#333] text-2xl font-medium ios-btn pl-6 text-left">0</button>
+                                <button onClick={() => handleMain('.')} className="h-16 rounded-full bg-[#333] text-2xl font-medium ios-btn">.</button>
+                                <button onClick={() => handleMain('=')} className="h-16 rounded-full bg-[#ff9f0a] text-2xl font-medium ios-btn">=</button>
+                            </div>
+                        </div>
+
+                        {/* Vista Trasera */}
+                        <div className="card-face card-back text-white font-sans relative">
+                            
+                            {/* Header simplificado */}
+                            <div className="pt-4 px-4 pb-2 bg-[#1a1a1a] border-b border-gray-800">
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="text-xl font-bold text-red-600">Calculadolar</h1>
+                                        <button onClick={fetchRates} className={`p-1.5 bg-gray-800 rounded-full hover:bg-gray-700 text-gray-400 transition-all ${loading ? 'animate-spin text-white' : ''}`}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                                        </button>
+                                        <button onClick={() => setShowLog(true)} className="p-1.5 bg-gray-800 rounded-full hover:bg-gray-700 text-gray-400 relative">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                            {log.length > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center">{log.length}</span>}
+                                        </button>
+                                    </div>
+                                    <button onClick={() => setIsFlipped(false)} className="text-gray-500 hover:text-white">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                                <div className="text-[10px] text-gray-500 font-mono">
+                                    Actualizado: {new Date().toLocaleTimeString('es-VE', {hour: '2-digit', minute: '2-digit'})}
+                                </div>
+                            </div>
+
+                            {/* Contenido compacto */}
+                            <div className="flex-1 overflow-y-auto p-4 flex flex-col content-compact">
+                                
+                                {/* Tasas */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-[10px] text-red-500 font-bold ml-1">Tasa BCV</label>
+                                        <input type="number" 
+                                            placeholder={rates.bcv ? rates.bcv.toFixed(2) : 'Cargando...'} 
+                                            value={inputs.customBcv} 
+                                            onChange={e => setInputs({...inputs, customBcv: e.target.value})} 
+                                            className="w-full bg-[#222] border border-red-600 text-red-500 p-2 rounded-lg text-lg font-bold text-center outline-none focus:ring-1 focus:ring-red-500 placeholder-red-500/30" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-green-500 font-bold ml-1">Tasa Paralelo</label>
+                                        <input type="number" 
+                                            placeholder={rates.paralelo ? rates.paralelo.toFixed(2) : 'Cargando...'} 
+                                            value={inputs.customParalelo} 
+                                            onChange={e => setInputs({...inputs, customParalelo: e.target.value})} 
+                                            className="w-full bg-[#222] border border-green-600 text-green-500 p-2 rounded-lg text-lg font-bold text-center outline-none focus:ring-1 focus:ring-green-500 placeholder-green-500/30" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="h-px bg-gray-800 my-1"></div>
+
+                                {/* Inputs con altura fija */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="min-h-[110px]">
+                                        <label className="text-[10px] text-gray-400 uppercase font-bold ml-1">Precio en $</label>
+                                        <input type="number" placeholder="" value={inputs.priceDollar} onChange={e => setInputs({...inputs, priceDollar: e.target.value})} className="w-full bg-[#2c2c2e] border border-gray-600 text-white p-2 rounded-lg text-lg text-center outline-none focus:border-white" />
+                                        {infoBase}
+                                    </div>
+                                    <div className="min-h-[110px]">
+                                        <label className="text-[10px] text-gray-400 uppercase font-bold ml-1">Precio en Bs</label>
+                                        <div className="flex h-[46px] bg-[#2c2c2e] border border-gray-600 rounded-lg overflow-hidden focus-within:border-white">
+                                            <select value={inputs.currency} onChange={e => setInputs({...inputs, currency: e.target.value})} className="bg-[#3a3a3c] text-white px-1 text-xs font-bold border-r border-gray-600 outline-none"><option value="Bs">Bs</option><option value="$">$</option></select>
+                                            <input type="number" placeholder="" value={inputs.payAmount} onChange={e => setInputs({...inputs, payAmount: e.target.value})} className="w-full bg-transparent text-white p-1 text-lg text-center outline-none" />
+                                        </div>
+                                        {infoPay}
+                                    </div>
+                                </div>
+
+                                {/* Resultado */}
+                                <div className="flex gap-2 items-stretch h-16">
+                                    <div className={`flex-1 rounded-xl border border-dashed border-gray-700 bg-gray-900/50 flex flex-col items-center justify-center relative p-1`}>
+                                        <span className="text-[9px] text-gray-500 uppercase tracking-wider">Tasa Implícita</span>
+                                        {tasaImp > 0 ? (
+                                            <>
+                                                <div className="text-2xl font-bold text-white leading-none">{tasaImp.toFixed(2)} <span className="text-[10px] text-gray-400 font-normal">Bs/$</span></div>
+                                                <div className={`text-[8px] px-1.5 py-0.5 rounded uppercase font-bold mt-1 ${status.color} ${status.bg}`}>{status.text}</div>
+                                            </>
+                                        ) : <span className="text-xl font-bold text-gray-700">--.--</span>}
+                                        
+                                        <button id="logIcon" onClick={saveLog} className="absolute right-2 top-2 text-white hover:scale-110 active:scale-95 transition-transform" title="Guardar">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Mini Calc más cerca */}
+                                <div className="bg-[#1c1c1e] rounded-2xl p-3 border border-gray-800 mini-calc-compact">
+                                    <div className="text-right text-2xl font-light text-white mb-3 h-8 px-2 overflow-hidden">{miniDisp}</div>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {['AC','/','*','-'].map(b => <button key={b} onClick={() => handleMini(b === 'AC' ? 'AC' : isNaN(b) ? b : parseInt(b))} className="h-8 rounded-lg bg-[#333] text-sm text-white mini-btn">{b}</button>)}
+                                        {['7','8','9','+'].map(b => <button key={b} onClick={() => handleMini(parseInt(b))} className="h-8 rounded-lg bg-[#444] text-sm text-white mini-btn">{b}</button>)}
+                                        <button onClick={() => handleMini('+')} className="col-start-4 row-start-2 h-8 rounded-lg bg-[#ff9f0a] text-sm text-white mini-btn">+</button>
+                                        
+                                        {['4','5','6','='].map(b => {
+                                            if(b==='=') return <button key={b} onClick={() => handleMini('=')} className="h-[72px] row-span-2 col-start-4 row-start-3 rounded-lg bg-[#ff9f0a] text-sm text-white mini-btn">=</button>
+                                            return <button key={b} onClick={() => handleMini(parseInt(b))} className="h-8 rounded-lg bg-[#444] text-sm text-white mini-btn">{b}</button>
+                                        })}
+
+                                        {['1','2','3'].map(b => <button key={b} onClick={() => handleMini(parseInt(b))} className="h-8 rounded-lg bg-[#444] text-sm text-white mini-btn">{b}</button>)}
+                                        
+                                        <button onClick={() => handleMini(0)} className="h-8 col-span-2 rounded-lg bg-[#444] text-sm text-white mini-btn">0</button>
+                                        <button onClick={() => handleMini('.')} className="h-8 rounded-lg bg-[#444] text-sm text-white mini-btn">.</button>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            {/* Drawer Log */}
+                            {showLog && (
+                                <div className="absolute inset-0 bg-black/95 z-50 flex flex-col">
+                                    <div className="flex justify-between items-center p-4 border-b border-gray-800">
+                                        <h2 className="text-lg font-bold text-white">Historial</h2>
+                                        <button onClick={() => setShowLog(false)} className="text-gray-400 hover:text-white">
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="flex-1 overflow-y-auto p-4">
+                                        {log.length === 0 ? (
+                                            <div className="text-center text-gray-500 mt-8">No hay registros</div>
+                                        ) : (
+                                            log.map(entry => (
+                                                <div key={entry.id} 
+                                                    onClick={() => copyToClipboard(entry)}
+                                                    className="bg-[#1c1c1e] rounded-lg p-3 mb-3 border border-gray-800 cursor-pointer hover:bg-[#252525] active:scale-98 transition-all">
+                                                    
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="text-[10px] text-gray-400">{entry.timestamp}</div>
+                                                        <button id={`copy-${entry.id}`} className="text-gray-400 hover:text-white">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2 mb-2 text-[11px]">
+                                                        <div className="bg-red-900/20 p-2 rounded">
+                                                            <div className="text-red-400 text-[9px] uppercase font-bold">BCV</div>
+                                                            <div className="text-white font-bold">{entry.bcv} Bs/$</div>
+                                                        </div>
+                                                        <div className="bg-green-900/20 p-2 rounded">
+                                                            <div className="text-green-400 text-[9px] uppercase font-bold">Paralelo</div>
+                                                            <div className="text-white font-bold">{entry.paralelo} Bs/$</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-[#2a2a2a] p-2 rounded mb-2">
+                                                        <div className="text-[9px] text-gray-400 uppercase mb-1">Precio Base</div>
+                                                        <div className="text-white font-bold text-sm">${entry.priceDollar}</div>
+                                                        <div className="text-[10px] text-gray-400 mt-1 flex justify-between">
+                                                            <span>BCV: Bs {entry.priceInBcv}</span>
+                                                            <span>Par: Bs {entry.priceInPar}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-[#2a2a2a] p-2 rounded mb-2">
+                                                        <div className="text-[9px] text-gray-400 uppercase mb-1">Monto Pagado</div>
+                                                        <div className="text-white font-bold text-sm">{entry.currency} {entry.payAmount}</div>
+                                                        <div className="text-[10px] text-gray-400 mt-1 flex justify-between">
+                                                            {entry.currency === 'Bs' ? (
+                                                                <>
+                                                                    <span>BCV: ${entry.payInBcv}</span>
+                                                                    <span>Par: ${entry.payInPar}</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span>BCV: Bs {entry.payInBcv}</span>
+                                                                    <span>Par: Bs {entry.payInPar}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="text-2xl font-bold text-white">{entry.rate} <span className="text-xs text-gray-400">Bs/$</span></div>
+                                                            <div className={`text-[8px] px-2 py-0.5 rounded inline-block mt-1 ${entry.status.includes('EXCELENTE') ? 'bg-green-900/30 text-green-400 border border-green-600' : entry.status.includes('ALERTA') ? 'bg-red-900/30 text-red-400 border border-red-600' : 'bg-yellow-900/30 text-yellow-400 border border-yellow-600'}`}>
+                                                                {entry.status}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-500 italic">
+                                                            Toca para copiar
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                    
+                                    {log.length > 0 && (
+                                        <div className="p-4 border-t border-gray-800">
+                                            <button onClick={() => setLog([])} className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-bold">
+                                                Limpiar Historial
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

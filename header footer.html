@@ -1,0 +1,2322 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Editor de Header/Footer - Herramienta Profesional</title>
+  
+  <!-- Fabric.js para la edición gráfica -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  
+  <!-- Iconos -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    :root{
+      --bg0:#050A07; --bg1:#07130E;
+      --glass: rgba(255,255,255,.08);
+      --glass2: rgba(255,255,255,.05);
+      --stroke: rgba(255,255,255,.16);
+      --stroke2: rgba(255,255,255,.10);
+      --text: rgba(255,255,255,.88);
+      --muted: rgba(255,255,255,.62);
+      --good: rgba(120, 255, 190, .92);
+      --warn: rgba(255, 210, 120, .92);
+      --bad: rgba(255, 120, 140, .92);
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
+      --radius: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; }
+    body{
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(900px 600px at 18% 12%, rgba(70,255,170,.10), transparent 60%),
+        radial-gradient(900px 600px at 82% 30%, rgba(90,170,255,.09), transparent 60%),
+        radial-gradient(900px 600px at 55% 90%, rgba(120,255,190,.07), transparent 65%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow-x:hidden;
+    }
+    
+    /* Matrix Background */
+    #matrixCanvas{
+      position: fixed; inset: 0; z-index: 0;
+      opacity: .85; pointer-events:none;
+      filter: saturate(120%) contrast(110%);
+      mix-blend-mode: screen;
+    }
+    .vignette{
+      position: fixed; inset: 0; z-index: 1; pointer-events:none;
+      background:
+        radial-gradient(1200px 800px at 50% 35%, rgba(0,0,0,.22), rgba(0,0,0,.55) 70%),
+        linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.35));
+    }
+    .goo{
+      position: fixed; inset: -40px; z-index: 2; pointer-events:none;
+      filter: blur(28px) saturate(130%);
+      opacity:.55; mix-blend-mode: screen;
+    }
+    .blob{ position:absolute; border-radius: 999px; animation: drift 16s ease-in-out infinite; }
+    .b1{ width:380px;height:380px; left:7%; top:14%;
+      background: radial-gradient(circle at 35% 35%, rgba(90,255,190,.25), rgba(90,255,190,0) 65%); }
+    .b2{ width:420px;height:420px; right:6%; top:18%; animation-duration: 19s;
+      background: radial-gradient(circle at 40% 40%, rgba(90,170,255,.22), rgba(90,170,255,0) 68%); }
+    .b3{ width:460px;height:460px; left:38%; bottom:6%; animation-duration: 22s;
+      background: radial-gradient(circle at 40% 40%, rgba(120,255,190,.18), rgba(120,255,190,0) 70%); }
+    @keyframes drift{
+      0%{ transform: translate(0,0) scale(1); }
+      35%{ transform: translate(28px,-22px) scale(1.05); }
+      70%{ transform: translate(-22px,18px) scale(0.98); }
+      100%{ transform: translate(0,0) scale(1); }
+    }
+    
+    /* Contenedor principal */
+    .wrap{ 
+      max-width: 100%; 
+      margin: 0 auto; 
+      padding: 15px; 
+      position:relative; 
+      z-index: 3; 
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Header principal */
+    .main-header {
+      display:flex; 
+      align-items:center; 
+      justify-content:space-between; 
+      gap:16px; 
+      margin-bottom: 10px; 
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+    }
+    h1{ 
+      margin:0; 
+      font-weight: 820; 
+      letter-spacing: .2px; 
+      font-size: 22px; 
+      background: linear-gradient(90deg, rgba(120,255,190,.9), rgba(90,170,255,.9));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .subtitle{ 
+      margin-top: 2px; 
+      color: var(--muted); 
+      font-size: 12px; 
+      line-height: 1.35; 
+    }
+    .pill{
+      display:inline-flex; 
+      align-items:center; 
+      gap:8px;
+      padding: 8px 10px; 
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      border: 1px solid var(--stroke2);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      backdrop-filter: blur(14px); 
+      -webkit-backdrop-filter: blur(14px);
+      user-select:none; 
+      font-size: 11px; 
+      color: rgba(255,255,255,.8); 
+      white-space:nowrap;
+    }
+    .dot{ 
+      width:8px;
+      height:8px;
+      border-radius:999px; 
+      background: rgba(120,255,190,.8); 
+      box-shadow: 0 0 0 2px rgba(120,255,190,.15); 
+    }
+    
+    /* Contenido principal */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+    
+    /* Barra de herramientas principal - DOS NIVELES */
+    .toolbar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .main-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+    }
+    
+    /* Segunda fila de herramientas */
+    .secondary-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    
+    /* Grupo de herramientas */
+    .tool-group {
+      display: flex;
+      gap: 5px;
+      padding-right: 10px;
+      border-right: 1px solid rgba(255,255,255,.1);
+    }
+    
+    .tool-group:last-child {
+      border-right: none;
+      padding-right: 0;
+    }
+    
+    /* Botón de herramienta - 20% más pequeño */
+    .tool-btn {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.8);
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    
+    .tool-btn:hover {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.2);
+      transform: translateY(-1px);
+    }
+    
+    .tool-btn.active {
+      background: linear-gradient(180deg, rgba(90,170,255,.15), rgba(90,170,255,.08));
+      border-color: rgba(90,170,255,.4);
+      color: rgba(90,170,255,.95);
+      box-shadow: 0 3px 10px rgba(90,170,255,.2);
+    }
+    
+    .tool-btn i {
+      font-size: 16px;
+    }
+    
+    .tool-btn .tool-label {
+      position: absolute;
+      bottom: -26px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.8);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 100;
+    }
+    
+    .tool-btn:hover .tool-label {
+      opacity: 1;
+    }
+    
+    /* Botones especiales más grandes */
+    .tool-btn-lg {
+      width: 48px;
+      height: 38px;
+    }
+    
+    /* Selector de color */
+    .color-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.05);
+      border: 2px solid rgba(255,255,255,.15);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .color-btn:hover {
+      border-color: rgba(255,255,255,.3);
+      transform: translateY(-1px);
+    }
+    
+    .color-preview {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+    }
+    
+    /* Área de trabajo */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      gap: 15px;
+      min-height: 0;
+    }
+    
+    /* Panel de propiedades - con toggle */
+    .properties-panel {
+      width: 280px;
+      padding: 18px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+      transition: all 0.3s ease;
+    }
+    
+    .properties-panel.hidden {
+      width: 0;
+      padding: 0;
+      border: none;
+      overflow: hidden;
+    }
+    
+    .toggle-sidebar-btn {
+      position: absolute;
+      right: -15px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 30px;
+      height: 60px;
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      border-left: none;
+      border-radius: 0 10px 10px 0;
+      color: rgba(255,255,255,.8);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    
+    .properties-panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 13px;
+      color: rgba(255,255,255,.85);
+      font-weight: 780;
+      letter-spacing: 0.5px;
+    }
+    
+    /* Grupo de propiedades */
+    .prop-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .prop-group label {
+      font-size: 11px;
+      color: rgba(255,255,255,.7);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .prop-input {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.14);
+      color: rgba(255,255,255,.9);
+      font-family: var(--mono);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    
+    .prop-input:focus {
+      border-color: rgba(120,255,190,.6);
+    }
+    
+    .prop-input.small {
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+    
+    /* Selector de área */
+    .area-selector {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    
+    .area-btn {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.8);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.12s ease;
+      text-align: center;
+    }
+    
+    .area-btn:hover {
+      background: rgba(255,255,255,.08);
+    }
+    
+    .area-btn.active {
+      background: linear-gradient(180deg, rgba(120,255,190,.15), rgba(120,255,190,.08));
+      border-color: rgba(120,255,190,.4);
+      color: rgba(120,255,190,.95);
+    }
+    
+    /* Vista de página carta */
+    .page-view-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: auto;
+      padding: 15px;
+      min-height: 0;
+    }
+    
+    .page-view {
+      position: relative;
+      background: white;
+      box-shadow: 0 10px 40px rgba(0,0,0,.4);
+      border-radius: 2px;
+      transform-origin: center center;
+      transform: scale(0.8);
+      transition: transform 0.3s ease;
+    }
+    
+    .page-content {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* ÁREAS CORREGIDAS: Header y Footer dentro de la hoja */
+    .header-area, .footer-area {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      background: white !important;
+      border: none !important;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    
+    .header-area:hover, .footer-area:hover {
+      background: rgba(120,255,190,.05) !important;
+    }
+    
+    .header-area.active, .footer-area.active {
+      background: rgba(120,255,190,.1) !important;
+      outline: 2px solid rgba(120,255,190,.6);
+      outline-offset: -2px;
+    }
+    
+    .header-area {
+      top: 0;
+    }
+    
+    .footer-area {
+      bottom: 0;
+    }
+    
+    /* Área de contenido translúcida */
+    .content-area {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.03) !important; /* Más translúcido */
+      pointer-events: none;
+      border-top: 1px solid rgba(0,0,0,0.05);
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    
+    .area-label {
+      position: absolute;
+      padding: 4px 8px;
+      background: rgba(0,0,0,.7);
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .header-area .area-label {
+      top: 4px;
+      left: 4px;
+    }
+    
+    .footer-area .area-label {
+      bottom: 4px;
+      right: 4px;
+    }
+    
+    /* Barra de estado */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+      margin-top: 10px;
+      font-size: 11px;
+    }
+    
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .zoom-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.8);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s ease;
+    }
+    
+    .zoom-btn:hover {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.2);
+    }
+    
+    .zoom-value {
+      font-size: 11px;
+      color: rgba(255,255,255,.8);
+      min-width: 50px;
+      text-align: center;
+    }
+    
+    /* Modal */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,.85);
+      backdrop-filter: blur(10px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      padding: 20px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+    
+    .modal-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.8);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    
+    .modal-title {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+      color: rgba(255,255,255,.9);
+      font-weight: 780;
+    }
+    
+    /* Status */
+    .status {
+      font-size: 11px; 
+      color: rgba(255,255,255,.8); 
+      display:flex; 
+      gap:8px; 
+      align-items:center;
+    }
+    
+    .spinner{
+      width: 12px; 
+      height:12px; 
+      border-radius:999px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-top-color: rgba(255,255,255,.85);
+      animation: spin .85s linear infinite;
+      display:none;
+    }
+    
+    .spin .spinner{ display:inline-block; }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
+    
+    /* File Input */
+    .file-input-hidden {
+      display: none;
+    }
+    
+    /* Range Slider */
+    .range-slider {
+      width: 100%;
+      margin: 12px 0;
+    }
+    
+    .range-slider label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: rgba(255,255,255,.7);
+    }
+    
+    .range-slider input {
+      width: 100%;
+    }
+    
+    /* Drag and drop area */
+    .drag-drop-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(120,255,190,.1);
+      border: 3px dashed rgba(120,255,190,.6);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 50;
+      pointer-events: none;
+    }
+    
+    .drag-drop-overlay.active {
+      display: flex;
+    }
+    
+    .drag-drop-text {
+      background: rgba(0,0,0,.8);
+      color: white;
+      padding: 15px 20px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center;
+    }
+    
+    /* Helper classes */
+    .row { 
+      display:flex; 
+      gap:8px; 
+      flex-wrap:wrap; 
+      align-items:center; 
+      margin-bottom: 8px;
+    }
+    
+    .col { 
+      display:flex; 
+      flex-direction:column; 
+      gap:10px; 
+    }
+    
+    .hint {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.16);
+      color: rgba(255,255,255,.70);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    
+    .small { 
+      font-size: 11px; 
+      color: rgba(255,255,255,.58); 
+    }
+    
+    /* Info Box */
+    .info-box {
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.14);
+      border: 1px solid rgba(255,255,255,.08);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 12px;
+    }
+    
+    .info-box span {
+      color: rgba(120,255,190,.9);
+      font-weight: 700;
+    }
+    
+    /* Separator */
+    .separator {
+      height: 1px;
+      background: rgba(255,255,255,.1);
+      margin: 12px 0;
+    }
+    
+    /* Button styles */
+    .action-btn {
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+      border: 1px solid rgba(255,255,255,.16);
+      color: rgba(255,255,255,.88);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .action-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,.28);
+      background: linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.08));
+    }
+    
+    .action-btn.primary {
+      background: linear-gradient(180deg, rgba(120,255,190,.15), rgba(120,255,190,.08));
+      border-color: rgba(120,255,190,.4);
+      color: rgba(120,255,190,.95);
+    }
+    
+    .action-btn.primary:hover {
+      background: linear-gradient(180deg, rgba(120,255,190,.2), rgba(120,255,255,.12));
+      border-color: rgba(120,255,190,.6);
+    }
+    
+    /* Text align buttons */
+    .align-buttons {
+      display: flex;
+      gap: 4px;
+    }
+    
+    .align-btn {
+      flex: 1;
+      padding: 6px;
+      border-radius: 6px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.8);
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s ease;
+    }
+    
+    .align-btn:hover {
+      background: rgba(255,255,255,.08);
+    }
+    
+    .align-btn.active {
+      background: rgba(90,170,255,.15);
+      border-color: rgba(90,170,255,.4);
+      color: rgba(90,170,255,.95);
+    }
+    
+    /* Controles de recorte */
+    .crop-controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 8px;
+      border-radius: 6px;
+      display: flex;
+      gap: 5px;
+      z-index: 100;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Fondo Matrix -->
+  <canvas id="matrixCanvas" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="goo" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+  </div>
+  
+  <!-- Contenido principal -->
+  <div class="wrap">
+    <!-- Header principal -->
+    <div class="main-header">
+      <div>
+        <h1><i class="fas fa-file-alt"></i> Editor de Header & Footer</h1>
+        <div class="subtitle">Diseña headers y footers profesionales para documentos tamaño carta</div>
+      </div>
+      <div class="pill"><span class="dot"></span><span>Procesamiento 100% local</span></div>
+    </div>
+    
+    <div class="main-content">
+      <!-- Barra de herramientas principal - DOS NIVELES -->
+      <div class="toolbar-container">
+        <!-- Primer nivel -->
+        <div class="main-toolbar">
+          <!-- Herramientas de selección -->
+          <div class="tool-group">
+            <div class="tool-btn active" id="toolSelect" data-tool="select">
+              <i class="fas fa-mouse-pointer"></i>
+              <div class="tool-label">Seleccionar (V)</div>
+            </div>
+            <div class="tool-btn" id="toolHand" data-tool="hand">
+              <i class="fas fa-hand-paper"></i>
+              <div class="tool-label">Mano (H)</div>
+            </div>
+          </div>
+          
+          <!-- Herramientas de dibujo -->
+          <div class="tool-group">
+            <div class="tool-btn" id="toolText" data-tool="text">
+              <i class="fas fa-font"></i>
+              <div class="tool-label">Texto (T)</div>
+            </div>
+            <div class="tool-btn" id="toolRectangle" data-tool="rectangle">
+              <i class="fas fa-square"></i>
+              <div class="tool-label">Rectángulo (R)</div>
+            </div>
+            <div class="tool-btn" id="toolLine" data-tool="line">
+              <i class="fas fa-minus"></i>
+              <div class="tool-label">Línea (L)</div>
+            </div>
+          </div>
+          
+          <!-- Herramientas de imagen -->
+          <div class="tool-group">
+            <div class="tool-btn" id="toolImage" data-tool="image">
+              <i class="fas fa-image"></i>
+              <div class="tool-label">Imagen (I)</div>
+            </div>
+            <div class="tool-btn" id="btnRemoveBg" data-action="remove-bg">
+              <i class="fas fa-magic"></i>
+              <div class="tool-label">Remover Fondo</div>
+            </div>
+            <div class="tool-btn" id="btnCrop" data-action="crop">
+              <i class="fas fa-crop"></i>
+              <div class="tool-label">Recortar</div>
+            </div>
+          </div>
+          
+          <!-- Herramientas de orden -->
+          <div class="tool-group">
+            <div class="tool-btn" id="btnBringForward" data-action="bring-forward">
+              <i class="fas fa-arrow-up"></i>
+              <div class="tool-label">Traer al frente</div>
+            </div>
+            <div class="tool-btn" id="btnSendBackward" data-action="send-backward">
+              <i class="fas fa-arrow-down"></i>
+              <div class="tool-label">Enviar atrás</div>
+            </div>
+            <div class="tool-btn" id="btnDelete" data-action="delete">
+              <i class="fas fa-trash"></i>
+              <div class="tool-label">Eliminar (Del)</div>
+            </div>
+          </div>
+          
+          <!-- Herramientas de color -->
+          <div class="tool-group">
+            <div class="tool-btn" id="btnFillColor" data-action="fill-color">
+              <i class="fas fa-fill-drip"></i>
+              <div class="tool-label">Color de relleno</div>
+            </div>
+            <div class="color-btn" id="colorPickerBtn">
+              <div class="color-preview" id="colorPreview" style="background: #000000;"></div>
+            </div>
+            <div class="tool-btn" id="btnStrokeColor" data-action="stroke-color">
+              <i class="fas fa-pencil-alt"></i>
+              <div class="tool-label">Color de borde</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Segundo nivel -->
+        <div class="secondary-toolbar">
+          <!-- Selector de área -->
+          <div class="tool-group">
+            <button class="area-btn active" id="areaHeader">Header</button>
+            <button class="area-btn" id="areaFooter">Footer</button>
+          </div>
+          
+          <!-- Herramientas de exportación -->
+          <div class="tool-group">
+            <div class="tool-btn tool-btn-lg" id="btnSaveHeader" data-action="save-header">
+              <i class="fas fa-download"></i>
+              <div class="tool-label">Guardar Header</div>
+            </div>
+            <div class="tool-btn tool-btn-lg" id="btnSaveFooter" data-action="save-footer">
+              <i class="fas fa-download"></i>
+              <div class="tool-label">Guardar Footer</div>
+            </div>
+          </div>
+          
+          <!-- Zoom -->
+          <div class="tool-group">
+            <div class="zoom-controls" style="flex-direction: row; align-items: center; gap: 6px;">
+              <button class="zoom-btn" id="btnZoomOut"><i class="fas fa-search-minus"></i></button>
+              <div class="zoom-value" id="zoomValue">80%</div>
+              <button class="zoom-btn" id="btnZoomIn"><i class="fas fa-search-plus"></i></button>
+              <button class="action-btn small" id="btnResetZoom" style="padding: 4px 8px; font-size: 11px;">
+                <i class="fas fa-search"></i> 100%
+              </button>
+            </div>
+          </div>
+          
+          <!-- Toggle sidebar -->
+          <div class="tool-group">
+            <div class="tool-btn" id="btnToggleSidebar" data-action="toggle-sidebar">
+              <i class="fas fa-sliders-h"></i>
+              <div class="tool-label">Panel lateral</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Área de trabajo -->
+      <div class="workspace">
+        <!-- Panel de propiedades con toggle -->
+        <div class="properties-panel" id="propertiesPanel">
+          <button class="toggle-sidebar-btn" id="toggleSidebarBtn">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+          
+          <h3><i class="fas fa-sliders-h"></i> Propiedades</h3>
+          
+          <!-- Propiedades de texto -->
+          <div class="prop-group" id="textProperties">
+            <label>Texto</label>
+            <input type="text" id="textInput" class="prop-input" placeholder="Escribe aquí...">
+            
+            <div class="row">
+              <input type="number" id="fontSize" class="prop-input small" style="width: 70px;" value="16" min="8" max="72" placeholder="Tamaño">
+              <select id="fontFamily" class="prop-input small" style="flex: 1;">
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+              </select>
+            </div>
+            
+            <label style="margin-top: 6px;">Alineación</label>
+            <div class="align-buttons">
+              <button class="align-btn active" data-align="left"><i class="fas fa-align-left"></i></button>
+              <button class="align-btn" data-align="center"><i class="fas fa-align-center"></i></button>
+              <button class="align-btn" data-align="right"><i class="fas fa-align-right"></i></button>
+              <button class="align-btn" data-align="justify"><i class="fas fa-align-justify"></i></button>
+            </div>
+          </div>
+          
+          <!-- Propiedades de forma -->
+          <div class="prop-group" id="shapeProperties" style="display: none;">
+            <label>Dimensiones</label>
+            <div class="row">
+              <input type="number" id="shapeWidth" class="prop-input small" placeholder="Ancho" value="100">
+              <input type="number" id="shapeHeight" class="prop-input small" placeholder="Alto" value="60">
+            </div>
+            
+            <label style="margin-top: 6px;">Borde</label>
+            <div class="row">
+              <input type="number" id="strokeWidth" class="prop-input small" placeholder="Grosor" value="1" min="0" max="20">
+              <input type="color" id="strokeColorPicker" class="file-input-hidden">
+              <div class="color-btn" style="width: 32px; height: 32px;" id="strokeColorBtn">
+                <div class="color-preview" style="background: #000000;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Propiedades de imagen -->
+          <div class="prop-group" id="imageProperties" style="display: none;">
+            <label>Opacidad</label>
+            <input type="range" id="imageOpacity" class="prop-input" min="0" max="100" value="100">
+            
+            <label style="margin-top: 6px;">Filtros</label>
+            <div class="row">
+              <button class="action-btn small" id="btnBrightness" style="padding: 4px 6px; font-size: 11px;">
+                <i class="fas fa-sun"></i>
+              </button>
+              <button class="action-btn small" id="btnContrast" style="padding: 4px 6px; font-size: 11px;">
+                <i class="fas fa-adjust"></i>
+              </button>
+              <button class="action-btn small" id="btnGrayscale" style="padding: 4px 6px; font-size: 11px;">
+                <i class="fas fa-tint"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="separator"></div>
+          
+          <!-- Configuración del documento -->
+          <div class="prop-group">
+            <label>Configuración</label>
+            <div class="row">
+              <input type="number" id="headerHeight" class="prop-input small" value="100" placeholder="Alto Header">
+              <input type="number" id="footerHeight" class="prop-input small" value="80" placeholder="Alto Footer">
+            </div>
+            
+            <button class="action-btn" id="btnApplyDocSettings" style="margin-top: 6px; padding: 6px 10px;">
+              <i class="fas fa-check"></i> Aplicar
+            </button>
+          </div>
+          
+          <!-- Información -->
+          <div class="info-box">
+            <div><b>Herramienta:</b> <span id="currentToolInfo">Seleccionar</span></div>
+            <div><b>Área activa:</b> <span id="currentAreaInfo">Header</span></div>
+            <div><b>Elementos:</b> <span id="elementCountInfo">0</span></div>
+            <div><b>Zoom:</b> <span id="zoomLevelInfo">80%</span></div>
+          </div>
+        </div>
+        
+        <!-- Vista de página carta -->
+        <div class="page-view-container">
+          <!-- Overlay para drag and drop -->
+          <div class="drag-drop-overlay" id="dragDropOverlay">
+            <div class="drag-drop-text">
+              <i class="fas fa-cloud-upload-alt" style="font-size: 36px; margin-bottom: 8px;"></i><br>
+              Suelta la imagen aquí
+            </div>
+          </div>
+          
+          <!-- Contenedor de página -->
+          <div class="page-view" id="pageView" style="width: 595px; height: 842px;">
+            <!-- Área de Header (DENTRO de la hoja) -->
+            <div class="header-area active" id="headerArea" style="height: 100px;">
+              <div class="area-label">HEADER - Arrastra imágenes aquí</div>
+              <canvas id="headerCanvas" class="page-content"></canvas>
+            </div>
+            
+            <!-- Área de contenido translúcida -->
+            <div class="content-area" style="top: 100px; bottom: 80px;">
+              <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #aaa; font-size: 13px; text-align: center;">
+                ÁREA DE CONTENIDO<br>
+                <span style="font-size: 11px;">(No editable - Solo referencia)</span>
+              </div>
+            </div>
+            
+            <!-- Área de Footer (DENTRO de la hoja) -->
+            <div class="footer-area" id="footerArea" style="height: 80px; bottom: 0;">
+              <div class="area-label">FOOTER - Arrastra imágenes aquí</div>
+              <canvas id="footerCanvas" class="page-content"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Barra de estado -->
+      <div class="status-bar">
+        <div class="status" id="statusBox">
+          <span class="spinner"></span>
+          <span id="statusText" class="small">Listo. Haz clic en un área para comenzar a editar.</span>
+        </div>
+        
+        <div style="font-size: 11px; color: rgba(255,255,255,.7);">
+          Tamaño carta: 595×842px (210×297mm) | Header: 100px | Footer: 80px
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal para cargar imágenes -->
+  <div class="modal" id="imageUploadModal">
+    <div class="modal-content">
+      <button class="modal-close" id="modalCloseUpload">×</button>
+      <h2 class="modal-title"><i class="fas fa-cloud-upload-alt"></i> Cargar Imagen</h2>
+      
+      <div class="hint" style="margin-bottom: 15px;">
+        Selecciona una imagen desde tu computadora. Formatos soportados: JPG, PNG, GIF, SVG.
+      </div>
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <div style="width: 180px; height: 135px; margin: 0 auto 15px; border: 2px dashed rgba(255,255,255,.3); border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer;" id="dropZone">
+          <div style="text-align: center;">
+            <i class="fas fa-file-upload" style="font-size: 36px; color: rgba(255,255,255,.5); margin-bottom: 8px;"></i><br>
+            <span style="color: rgba(255,255,255,.7); font-size: 12px;">Haz clic o arrastra aquí</span>
+          </div>
+        </div>
+        <input type="file" id="fileUploadInput" class="file-input-hidden" accept="image/*">
+        <button class="action-btn primary" id="btnBrowseFiles" style="margin-top: 8px; padding: 6px 12px;">
+          <i class="fas fa-folder-open"></i> Examinar archivos
+        </button>
+      </div>
+      
+      <div class="separator"></div>
+      
+      <div class="row" style="justify-content: center; margin-top: 15px;">
+        <button class="action-btn" id="btnCancelUpload" style="padding: 6px 12px;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal para remover fondo -->
+  <div class="modal" id="removeBgModal">
+    <div class="modal-content">
+      <button class="modal-close" id="modalCloseRemoveBg">×</button>
+      <h2 class="modal-title"><i class="fas fa-magic"></i> Remover Fondo de Imagen</h2>
+      <p class="small">Haz clic en el color del fondo que deseas remover. Ajusta la tolerancia para controlar la sensibilidad.</p>
+      
+      <canvas id="removeBgCanvas" style="width: 100%; height: 180px; background: white; border-radius: 8px; margin: 10px 0;"></canvas>
+      
+      <div class="range-slider">
+        <label for="toleranceSlider">Tolerancia: <span id="toleranceValue">30</span></label>
+        <input type="range" id="toleranceSlider" min="1" max="100" value="30">
+      </div>
+      
+      <div class="row" style="margin-top: 15px;">
+        <button class="action-btn primary" id="btnApplyRemoveBg" style="padding: 6px 12px;">
+          <i class="fas fa-check"></i> Aplicar
+        </button>
+        <button class="action-btn" id="btnCancelRemoveBg" style="padding: 6px 12px;">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button class="action-btn" id="btnResetRemoveBg" style="padding: 6px 12px;">
+          <i class="fas fa-redo"></i> Restablecer
+        </button>
+      </div>
+      
+      <div class="hint" style="margin-top: 12px;">
+        <b>Consejo:</b> Para mejores resultados, usa imágenes con fondos de color uniforme. 
+        Haz clic en el área del fondo que quieres remover, luego ajusta la tolerancia según sea necesario.
+      </div>
+    </div>
+  </div>
+
+  <!-- Inputs ocultos -->
+  <input type="file" id="imageUpload" class="file-input-hidden" accept="image/*">
+  <input type="color" id="colorPicker" class="file-input-hidden" value="#000000">
+  <input type="color" id="fillColorPicker" class="file-input-hidden" value="#000000">
+
+  <script>
+    // ============================================================
+    // MATRIX BACKGROUND
+    // ============================================================
+    (function(){
+      const canvas = document.getElementById("matrixCanvas");
+      const ctx = canvas.getContext("2d", { alpha: true });
+      let w=0, h=0, cols=0, fontSize=16, drops=[];
+      const glyphs = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&*+-/<>";
+
+      function resize(){
+        w = canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+        h = canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+        const scale = (window.devicePixelRatio || 1);
+        ctx.setTransform(scale,0,0,scale,0,0);
+        fontSize = Math.max(14, Math.floor(Math.min(window.innerWidth, window.innerHeight) / 55));
+        cols = Math.floor(window.innerWidth / fontSize);
+        drops = new Array(cols).fill(0).map(()=>Math.random()*window.innerHeight/fontSize);
+      }
+      
+      window.addEventListener("resize", resize, { passive:true });
+      resize();
+
+      let last = performance.now();
+      function tick(now){
+        const dt = Math.min(50, now - last); 
+        last = now;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        ctx.font = `${fontSize}px monospace`;
+
+        for (let i=0; i<cols; i++){
+          const x = i * fontSize;
+          const y = drops[i] * fontSize;
+          ctx.fillStyle = "rgba(120, 255, 190, 0.78)";
+          const ch = glyphs[Math.floor(Math.random()*glyphs.length)];
+          ctx.fillText(ch, x, y);
+          if (y > window.innerHeight && Math.random() > 0.975) drops[i] = 0;
+          drops[i] += (dt / 16) * (0.9 + Math.random()*0.8);
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+
+    // ============================================================
+    // EDITOR PROFESIONAL DE HEADER/FOOTER - VERSIÓN CORREGIDA
+    // ============================================================
+    (function(){
+      // Referencias a elementos DOM
+      const $ = id => document.getElementById(id);
+      
+      // Variables globales
+      let headerFabricCanvas = null;
+      let footerFabricCanvas = null;
+      let activeArea = 'header';
+      let currentCanvas = null;
+      let currentTool = 'select';
+      let currentColor = '#000000';
+      let currentFillColor = '#000000';
+      let currentStrokeColor = '#000000';
+      let zoomLevel = 0.8;
+      let selectedImageObject = null;
+      let originalImageData = null;
+      let isCropping = false;
+      let cropRect = null;
+      
+      // Dimensiones del documento
+      const docWidth = 595;
+      const docHeight = 842;
+      let headerHeight = 100;
+      let footerHeight = 80;
+      
+      // Referencias a elementos UI
+      const pageView = $('pageView');
+      const headerArea = $('headerArea');
+      const footerArea = $('footerArea');
+      const headerCanvas = $('headerCanvas');
+      const footerCanvas = $('footerCanvas');
+      const dragDropOverlay = $('dragDropOverlay');
+      const removeBgCanvas = $('removeBgCanvas');
+      const removeBgModal = $('removeBgModal');
+      const imageUploadModal = $('imageUploadModal');
+      const propertiesPanel = $('propertiesPanel');
+      const toggleSidebarBtn = $('toggleSidebarBtn');
+      
+      // Estado
+      const statusText = $('statusText');
+      const statusBox = $('statusBox');
+      const currentToolInfo = $('currentToolInfo');
+      const currentAreaInfo = $('currentAreaInfo');
+      const elementCountInfo = $('elementCountInfo');
+      const zoomValue = $('zoomValue');
+      const zoomLevelInfo = $('zoomLevelInfo');
+      
+      // Inicialización
+      function init() {
+        setupEventListeners();
+        createCanvases();
+        updateUI();
+        setStatus('Editor listo. Haz clic en una herramienta para comenzar.', false);
+      }
+      
+      function createCanvases() {
+        // Crear canvas de Fabric.js para header
+        headerFabricCanvas = new fabric.Canvas('headerCanvas', {
+          backgroundColor: 'white',
+          selection: true,
+          selectionColor: 'rgba(90, 170, 255, 0.3)',
+          selectionBorderColor: 'rgba(90, 170, 255, 0.8)',
+          selectionLineWidth: 2,
+          width: docWidth,
+          height: headerHeight
+        });
+        
+        // Crear canvas de Fabric.js para footer
+        footerFabricCanvas = new fabric.Canvas('footerCanvas', {
+          backgroundColor: 'white',
+          selection: true,
+          selectionColor: 'rgba(90, 170, 255, 0.3)',
+          selectionBorderColor: 'rgba(90, 170, 255, 0.8)',
+          selectionLineWidth: 2,
+          width: docWidth,
+          height: footerHeight
+        });
+        
+        // Configurar canvas activo inicial
+        currentCanvas = headerFabricCanvas;
+        
+        // Configurar eventos de los canvas
+        setupCanvasEvents(headerFabricCanvas);
+        setupCanvasEvents(footerFabricCanvas);
+      }
+      
+      function setupCanvasEvents(canvas) {
+        canvas.on('selection:created', updatePropertiesFromSelection);
+        canvas.on('selection:updated', updatePropertiesFromSelection);
+        canvas.on('selection:cleared', clearProperties);
+        
+        canvas.on('object:added', updateElementCount);
+        canvas.on('object:removed', updateElementCount);
+        canvas.on('object:modified', updateElementCount);
+        canvas.on('object:moving', updateElementCount);
+        
+        canvas.on('mouse:down', handleCanvasClick);
+        
+        // Permitir arrastrar y soltar imágenes
+        canvas.upperCanvasEl.addEventListener('dragover', handleDragOver);
+        canvas.upperCanvasEl.addEventListener('drop', handleDrop);
+        
+        // Evento para finalizar recorte al hacer doble clic
+        canvas.on('mouse:dblclick', handleDoubleClick);
+      }
+      
+      function setupEventListeners() {
+        // Selector de área
+        $('areaHeader').addEventListener('click', () => switchArea('header'));
+        $('areaFooter').addEventListener('click', () => switchArea('footer'));
+        
+        // Herramientas
+        document.querySelectorAll('[data-tool]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const tool = e.currentTarget.dataset.tool;
+            setTool(tool);
+          });
+        });
+        
+        // Acciones
+        document.querySelectorAll('[data-action]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const action = e.currentTarget.dataset.action;
+            handleAction(action);
+          });
+        });
+        
+        // Selector de color
+        $('colorPickerBtn').addEventListener('click', () => $('colorPicker').click());
+        $('colorPicker').addEventListener('input', (e) => {
+          currentColor = e.target.value;
+          updateColorPreview();
+        });
+        
+        // Propiedades
+        $('textInput').addEventListener('input', updateTextProperty);
+        $('fontSize').addEventListener('input', updateFontSize);
+        $('fontFamily').addEventListener('change', updateFontFamily);
+        
+        // Botones de alineación
+        document.querySelectorAll('.align-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.align-btn').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            updateTextAlign(e.currentTarget.dataset.align);
+          });
+        });
+        
+        // Configuración del documento
+        $('btnApplyDocSettings').addEventListener('click', applyDocumentSettings);
+        
+        // Zoom
+        $('btnZoomIn').addEventListener('click', () => adjustZoom(0.1));
+        $('btnZoomOut').addEventListener('click', () => adjustZoom(-0.1));
+        $('btnResetZoom').addEventListener('click', () => setZoom(1.0));
+        
+        // Toggle sidebar
+        $('btnToggleSidebar').addEventListener('click', togglePropertiesPanel);
+        toggleSidebarBtn.addEventListener('click', togglePropertiesPanel);
+        
+        // Modal de carga de imágenes
+        $('btnBrowseFiles').addEventListener('click', () => $('fileUploadInput').click());
+        $('dropZone').addEventListener('click', () => $('fileUploadInput').click());
+        $('fileUploadInput').addEventListener('change', handleFileUpload);
+        $('btnCancelUpload').addEventListener('click', () => imageUploadModal.classList.remove('active'));
+        $('modalCloseUpload').addEventListener('click', () => imageUploadModal.classList.remove('active'));
+        
+        // Modal de remoción de fondo
+        $('modalCloseRemoveBg').addEventListener('click', () => removeBgModal.classList.remove('active'));
+        $('btnCancelRemoveBg').addEventListener('click', () => removeBgModal.classList.remove('active'));
+        $('toleranceSlider').addEventListener('input', (e) => {
+          $('toleranceValue').textContent = e.target.value;
+        });
+        $('btnApplyRemoveBg').addEventListener('click', applyRemoveBackground);
+        $('btnResetRemoveBg').addEventListener('click', resetRemoveBgPreview);
+        
+        // Drag and drop global
+        document.addEventListener('dragover', handleGlobalDragOver);
+        document.addEventListener('dragleave', handleGlobalDragLeave);
+        document.addEventListener('drop', handleGlobalDrop);
+        
+        // Atajos de teclado
+        document.addEventListener('keydown', handleKeyDown);
+        
+        // Inicializar controles de recorte
+        setupCropControls();
+      }
+      
+      function togglePropertiesPanel() {
+        propertiesPanel.classList.toggle('hidden');
+        
+        // Cambiar icono del botón
+        const icon = toggleSidebarBtn.querySelector('i');
+        if (propertiesPanel.classList.contains('hidden')) {
+          icon.className = 'fas fa-chevron-left';
+          $('btnToggleSidebar').innerHTML = '<i class="fas fa-sliders-h"></i><div class="tool-label">Panel lateral</div>';
+        } else {
+          icon.className = 'fas fa-chevron-right';
+          $('btnToggleSidebar').innerHTML = '<i class="fas fa-sliders-h"></i><div class="tool-label">Panel lateral</div>';
+        }
+      }
+      
+      function switchArea(area) {
+        activeArea = area;
+        
+        // Actualizar UI
+        $('areaHeader').classList.toggle('active', area === 'header');
+        $('areaFooter').classList.toggle('active', area === 'footer');
+        headerArea.classList.toggle('active', area === 'header');
+        footerArea.classList.toggle('active', area === 'footer');
+        
+        // Actualizar canvas activo
+        currentCanvas = area === 'header' ? headerFabricCanvas : footerFabricCanvas;
+        currentAreaInfo.textContent = area === 'header' ? 'Header' : 'Footer';
+        
+        // Actualizar propiedades de la selección actual
+        updatePropertiesFromSelection();
+        
+        setStatus(`Editando ${area === 'header' ? 'Header' : 'Footer'}`, false);
+      }
+      
+      function setTool(tool) {
+        currentTool = tool;
+        
+        // Salir del modo recorte si se cambia de herramienta
+        if (isCropping && tool !== 'select') {
+          cancelCrop();
+        }
+        
+        // Actualizar botones
+        document.querySelectorAll('[data-tool]').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tool === tool);
+        });
+        
+        // Actualizar información
+        const toolNames = {
+          'select': 'Seleccionar',
+          'hand': 'Mano',
+          'text': 'Texto',
+          'rectangle': 'Rectángulo',
+          'line': 'Línea',
+          'image': 'Imagen'
+        };
+        currentToolInfo.textContent = toolNames[tool] || tool;
+        
+        // Cambiar cursor
+        if (currentCanvas) {
+          if (tool === 'select') {
+            currentCanvas.selection = true;
+            currentCanvas.defaultCursor = 'default';
+            currentCanvas.hoverCursor = 'move';
+          } else if (tool === 'hand') {
+            currentCanvas.selection = false;
+            currentCanvas.defaultCursor = 'grab';
+            currentCanvas.hoverCursor = 'grab';
+          } else {
+            currentCanvas.selection = false;
+            currentCanvas.defaultCursor = 'crosshair';
+            currentCanvas.hoverCursor = 'crosshair';
+          }
+        }
+        
+        // Mostrar/ocultar paneles de propiedades
+        updatePropertiesPanelVisibility();
+      }
+      
+      function handleCanvasClick(options) {
+        if (!currentCanvas) return;
+        
+        // Si estamos en modo recorte, no hacer nada más
+        if (isCropping) return;
+        
+        const pointer = currentCanvas.getPointer(options.e);
+        
+        switch(currentTool) {
+          case 'text':
+            addText(pointer.x, pointer.y);
+            break;
+          case 'rectangle':
+            addRectangle(pointer.x, pointer.y);
+            break;
+          case 'line':
+            addLine(pointer.x, pointer.y);
+            break;
+          case 'image':
+            imageUploadModal.classList.add('active');
+            break;
+        }
+        
+        // Volver a herramienta de selección después de añadir
+        if (currentTool !== 'image') {
+          setTimeout(() => setTool('select'), 100);
+        }
+      }
+      
+      function addText(x, y) {
+        const text = $('textInput').value || 'Texto aquí';
+        const textObj = new fabric.Text(text, {
+          left: x,
+          top: y,
+          fontSize: parseInt($('fontSize').value),
+          fontFamily: $('fontFamily').value,
+          fill: currentColor,
+          editable: true
+        });
+        
+        currentCanvas.add(textObj);
+        currentCanvas.setActiveObject(textObj);
+        currentCanvas.renderAll();
+        updateElementCount();
+      }
+      
+      function addRectangle(x, y) {
+        const rect = new fabric.Rect({
+          left: x,
+          top: y,
+          width: 100,
+          height: 60,
+          fill: currentFillColor,
+          stroke: currentStrokeColor,
+          strokeWidth: 1,
+          opacity: 1
+        });
+        
+        currentCanvas.add(rect);
+        currentCanvas.setActiveObject(rect);
+        currentCanvas.renderAll();
+        updateElementCount();
+      }
+      
+      function addLine(x, y) {
+        const line = new fabric.Line([x, y, x + 100, y], {
+          stroke: currentColor,
+          strokeWidth: 2
+        });
+        
+        currentCanvas.add(line);
+        currentCanvas.setActiveObject(line);
+        currentCanvas.renderAll();
+        updateElementCount();
+      }
+      
+      function handleAction(action) {
+        switch(action) {
+          case 'remove-bg':
+            openRemoveBgModal();
+            break;
+          case 'crop':
+            startCrop();
+            break;
+          case 'bring-forward':
+            bringToFront();
+            break;
+          case 'send-backward':
+            sendToBack();
+            break;
+          case 'delete':
+            deleteSelected();
+            break;
+          case 'fill-color':
+            $('fillColorPicker').click();
+            break;
+          case 'stroke-color':
+            // Implementar selector de color de borde
+            break;
+          case 'save-header':
+            exportCanvas('header');
+            break;
+          case 'save-footer':
+            exportCanvas('footer');
+            break;
+          case 'toggle-sidebar':
+            togglePropertiesPanel();
+            break;
+        }
+      }
+      
+      // ============================================
+      // FUNCIONALIDAD DE RECORTE MEJORADA
+      // ============================================
+      function setupCropControls() {
+        // Crear controles de recorte
+        const cropControls = document.createElement('div');
+        cropControls.className = 'crop-controls';
+        cropControls.style.display = 'none';
+        cropControls.innerHTML = `
+          <button class="action-btn small" id="applyCropBtn" style="padding: 4px 8px;">
+            <i class="fas fa-check"></i> Aplicar
+          </button>
+          <button class="action-btn small" id="cancelCropBtn" style="padding: 4px 8px;">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+        `;
+        document.querySelector('.page-view-container').appendChild(cropControls);
+        
+        // Eventos para controles de recorte
+        document.getElementById('applyCropBtn').addEventListener('click', applyCrop);
+        document.getElementById('cancelCropBtn').addEventListener('click', cancelCrop);
+      }
+      
+      function startCrop() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (!activeObject || activeObject.type !== 'image') {
+          setStatus('Selecciona una imagen para recortar', false);
+          return;
+        }
+        
+        isCropping = true;
+        selectedImageObject = activeObject;
+        
+        // Desactivar selección del canvas
+        currentCanvas.selection = false;
+        
+        // Crear rectángulo de recorte
+        cropRect = new fabric.Rect({
+          left: selectedImageObject.left,
+          top: selectedImageObject.top,
+          width: selectedImageObject.width * selectedImageObject.scaleX,
+          height: selectedImageObject.height * selectedImageObject.scaleY,
+          fill: 'rgba(0,0,0,0.3)',
+          stroke: 'rgba(255,255,255,0.8)',
+          strokeWidth: 2,
+          strokeDashArray: [5, 5],
+          hasControls: true,
+          hasBorders: true,
+          lockRotation: true,
+          selectable: true,
+          evented: true
+        });
+        
+        // Añadir al canvas
+        currentCanvas.add(cropRect);
+        currentCanvas.setActiveObject(cropRect);
+        
+        // Mostrar controles de recorte
+        document.querySelector('.crop-controls').style.display = 'flex';
+        
+        setStatus('Ajusta el área de recorte y haz clic en Aplicar', false);
+      }
+      
+      function applyCrop() {
+        if (!isCropping || !cropRect || !selectedImageObject) return;
+        
+        // Calcular coordenadas de recorte
+        const img = selectedImageObject;
+        const rect = cropRect;
+        
+        // Coordenadas relativas a la imagen
+        const cropLeft = (rect.left - img.left) / img.scaleX;
+        const cropTop = (rect.top - img.top) / img.scaleY;
+        const cropWidth = rect.width / img.scaleX;
+        const cropHeight = rect.height / img.scaleY;
+        
+        // Crear canvas temporal para recortar
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = cropWidth;
+        tempCanvas.height = cropHeight;
+        const ctx = tempCanvas.getContext('2d');
+        
+        // Dibujar la parte recortada
+        ctx.drawImage(
+          img._element,
+          cropLeft, cropTop, cropWidth, cropHeight,
+          0, 0, cropWidth, cropHeight
+        );
+        
+        // Crear nueva imagen recortada
+        const dataURL = tempCanvas.toDataURL('image/png');
+        
+        fabric.Image.fromURL(dataURL, function(newImg) {
+          newImg.set({
+            left: rect.left,
+            top: rect.top,
+            scaleX: 1,
+            scaleY: 1,
+            selectable: true
+          });
+          
+          // Reemplazar imagen original
+          currentCanvas.remove(img);
+          currentCanvas.remove(rect);
+          currentCanvas.add(newImg);
+          currentCanvas.setActiveObject(newImg);
+          currentCanvas.renderAll();
+          
+          // Limpiar estado
+          finishCrop();
+          
+          setStatus('Imagen recortada correctamente', false);
+        });
+      }
+      
+      function cancelCrop() {
+        if (!isCropping) return;
+        
+        // Remover rectángulo de recorte
+        if (cropRect) {
+          currentCanvas.remove(cropRect);
+        }
+        
+        // Restaurar selección original
+        if (selectedImageObject) {
+          currentCanvas.setActiveObject(selectedImageObject);
+        }
+        
+        finishCrop();
+        setStatus('Recorte cancelado', false);
+      }
+      
+      function finishCrop() {
+        isCropping = false;
+        cropRect = null;
+        selectedImageObject = null;
+        currentCanvas.selection = true;
+        document.querySelector('.crop-controls').style.display = 'none';
+      }
+      
+      function handleDoubleClick(options) {
+        if (isCropping && cropRect) {
+          applyCrop();
+        }
+      }
+      
+      // ============================================
+      
+      function updatePropertiesFromSelection() {
+        if (!currentCanvas) return;
+        
+        const activeObject = currentCanvas.getActiveObject();
+        if (!activeObject) {
+          clearProperties();
+          return;
+        }
+        
+        // Mostrar el panel de propiedades adecuado
+        updatePropertiesPanelVisibility();
+        
+        if (activeObject.type === 'text') {
+          $('textInput').value = activeObject.text;
+          $('fontSize').value = activeObject.fontSize;
+          $('fontFamily').value = activeObject.fontFamily || 'Arial';
+          
+          // Actualizar color
+          if (activeObject.fill) {
+            currentColor = activeObject.fill;
+            $('colorPicker').value = currentColor;
+            updateColorPreview();
+          }
+        } else if (activeObject.type === 'rect') {
+          $('shapeWidth').value = Math.round(activeObject.width * activeObject.scaleX);
+          $('shapeHeight').value = Math.round(activeObject.height * activeObject.scaleY);
+          
+          if (activeObject.fill) {
+            currentFillColor = activeObject.fill;
+            $('fillColorPicker').value = currentFillColor;
+          }
+          
+          if (activeObject.stroke) {
+            currentStrokeColor = activeObject.stroke;
+          }
+        } else if (activeObject.type === 'image') {
+          $('imageOpacity').value = Math.round((activeObject.opacity || 1) * 100);
+        }
+      }
+      
+      function updatePropertiesPanelVisibility() {
+        const activeObject = currentCanvas ? currentCanvas.getActiveObject() : null;
+        const type = activeObject ? activeObject.type : currentTool;
+        
+        // Ocultar todos los paneles
+        $('textProperties').style.display = 'none';
+        $('shapeProperties').style.display = 'none';
+        $('imageProperties').style.display = 'none';
+        
+        // Mostrar el panel correspondiente
+        if (type === 'text' || currentTool === 'text') {
+          $('textProperties').style.display = 'flex';
+        } else if (type === 'rect' || currentTool === 'rectangle') {
+          $('shapeProperties').style.display = 'flex';
+        } else if (type === 'image' || currentTool === 'image') {
+          $('imageProperties').style.display = 'flex';
+        }
+      }
+      
+      function clearProperties() {
+        $('textInput').value = '';
+        updatePropertiesPanelVisibility();
+      }
+      
+      function updateTextProperty() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject && activeObject.type === 'text') {
+          activeObject.set('text', $('textInput').value);
+          currentCanvas.renderAll();
+        }
+      }
+      
+      function updateFontSize() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject && activeObject.type === 'text') {
+          activeObject.set('fontSize', parseInt($('fontSize').value));
+          currentCanvas.renderAll();
+        }
+      }
+      
+      function updateFontFamily() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject && activeObject.type === 'text') {
+          activeObject.set('fontFamily', $('fontFamily').value);
+          currentCanvas.renderAll();
+        }
+      }
+      
+      function updateTextAlign(align) {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject && activeObject.type === 'text') {
+          activeObject.set('textAlign', align);
+          currentCanvas.renderAll();
+        }
+      }
+      
+      function updateObjectFillColor() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject && (activeObject.type === 'rect' || activeObject.type === 'text')) {
+          activeObject.set('fill', currentFillColor);
+          currentCanvas.renderAll();
+        }
+      }
+      
+      function updateColorPreview() {
+        $('colorPreview').style.background = currentColor;
+      }
+      
+      function bringToFront() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject) {
+          activeObject.bringToFront();
+          currentCanvas.renderAll();
+          setStatus('Elemento traído al frente', false);
+        }
+      }
+      
+      function sendToBack() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject) {
+          activeObject.sendToBack();
+          currentCanvas.renderAll();
+          setStatus('Elemento enviado atrás', false);
+        }
+      }
+      
+      function deleteSelected() {
+        // Si estamos en modo recorte, cancelar
+        if (isCropping) {
+          cancelCrop();
+          return;
+        }
+        
+        const activeObject = currentCanvas.getActiveObject();
+        if (activeObject) {
+          currentCanvas.remove(activeObject);
+          currentCanvas.renderAll();
+          updateElementCount();
+          setStatus('Elemento eliminado', false);
+        } else {
+          setStatus('Selecciona un elemento para eliminar', false);
+        }
+      }
+      
+      function updateElementCount() {
+        const headerCount = headerFabricCanvas.getObjects().length;
+        const footerCount = footerFabricCanvas.getObjects().length;
+        const totalCount = headerCount + footerCount;
+        
+        elementCountInfo.textContent = totalCount;
+      }
+      
+      function adjustZoom(delta) {
+        const newZoom = Math.max(0.1, Math.min(2, zoomLevel + delta));
+        setZoom(newZoom);
+      }
+      
+      function setZoom(level) {
+        zoomLevel = level;
+        pageView.style.transform = `scale(${level})`;
+        zoomValue.textContent = `${Math.round(level * 100)}%`;
+        zoomLevelInfo.textContent = `${Math.round(level * 100)}%`;
+      }
+      
+      function applyDocumentSettings() {
+        const newHeaderHeight = parseInt($('headerHeight').value) || headerHeight;
+        const newFooterHeight = parseInt($('footerHeight').value) || footerHeight;
+        
+        // Validar que las alturas no excedan el tamaño de la página
+        if (newHeaderHeight + newFooterHeight > docHeight - 100) {
+          setStatus('Error: La suma del header y footer no debe exceder la altura de la página', false);
+          return;
+        }
+        
+        // Actualizar áreas
+        headerArea.style.height = `${newHeaderHeight}px`;
+        footerArea.style.height = `${newFooterHeight}px`;
+        
+        // Actualizar área de contenido
+        const contentArea = document.querySelector('.content-area');
+        contentArea.style.top = `${newHeaderHeight}px`;
+        contentArea.style.bottom = `${newFooterHeight}px`;
+        
+        // Actualizar canvas
+        headerFabricCanvas.setDimensions({ width: docWidth, height: newHeaderHeight });
+        footerFabricCanvas.setDimensions({ width: docWidth, height: newFooterHeight });
+        
+        headerHeight = newHeaderHeight;
+        footerHeight = newFooterHeight;
+        
+        // Actualizar texto de estado
+        $('statusText').textContent = `Header: ${headerHeight}px | Footer: ${footerHeight}px`;
+        
+        setStatus('Configuración aplicada', false);
+      }
+      
+      // Funciones para drag and drop
+      function handleGlobalDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (e.dataTransfer.types.includes('Files')) {
+          dragDropOverlay.classList.add('active');
+        }
+      }
+      
+      function handleGlobalDragLeave(e) {
+        if (!dragDropOverlay.contains(e.relatedTarget)) {
+          dragDropOverlay.classList.remove('active');
+        }
+      }
+      
+      function handleGlobalDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        dragDropOverlay.classList.remove('active');
+        
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          
+          if (file.type.startsWith('image/')) {
+            loadImageFromFile(file);
+          } else {
+            setStatus('Por favor, arrastra solo imágenes', false);
+          }
+        }
+      }
+      
+      function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          
+          if (file.type.startsWith('image/')) {
+            loadImageFromFile(file);
+          }
+        }
+      }
+      
+      function handleFileUpload(e) {
+        if (e.target.files && e.target.files[0]) {
+          loadImageFromFile(e.target.files[0]);
+          imageUploadModal.classList.remove('active');
+          e.target.value = '';
+        }
+      }
+      
+      function loadImageFromFile(file) {
+        setStatus('Cargando imagen...', true);
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          fabric.Image.fromURL(event.target.result, function(img) {
+            // Ajustar tamaño al área
+            const maxWidth = currentCanvas.width * 0.8;
+            const maxHeight = currentCanvas.height * 0.8;
+            
+            if (img.width > maxWidth || img.height > maxHeight) {
+              const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+              img.scale(scale);
+            }
+            
+            // Posicionar en el centro
+            img.set({
+              left: (currentCanvas.width - img.width * img.scaleX) / 2,
+              top: (currentCanvas.height - img.height * img.scaleY) / 2,
+              selectable: true
+            });
+            
+            currentCanvas.add(img);
+            currentCanvas.setActiveObject(img);
+            currentCanvas.renderAll();
+            updateElementCount();
+            
+            setStatus('Imagen cargada correctamente', false);
+          });
+        };
+        
+        reader.readAsDataURL(file);
+      }
+      
+      // Funciones para remoción de fondo
+      function openRemoveBgModal() {
+        const activeObject = currentCanvas.getActiveObject();
+        if (!activeObject || activeObject.type !== 'image') {
+          setStatus('Selecciona una imagen primero para remover el fondo', false);
+          return;
+        }
+        
+        selectedImageObject = activeObject;
+        
+        // Obtener la imagen original
+        const imgElement = selectedImageObject._element;
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        tempCanvas.width = imgElement.naturalWidth || imgElement.width;
+        tempCanvas.height = imgElement.naturalHeight || imgElement.height;
+        
+        tempCtx.drawImage(imgElement, 0, 0);
+        originalImageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Mostrar en el modal
+        const ctx = removeBgCanvas.getContext('2d');
+        removeBgCanvas.width = Math.min(400, tempCanvas.width);
+        removeBgCanvas.height = Math.min(180, tempCanvas.height);
+        
+        const scale = Math.min(
+          removeBgCanvas.width / tempCanvas.width,
+          removeBgCanvas.height / tempCanvas.height
+        );
+        
+        ctx.clearRect(0, 0, removeBgCanvas.width, removeBgCanvas.height);
+        ctx.drawImage(imgElement, 0, 0, tempCanvas.width * scale, tempCanvas.height * scale);
+        
+        removeBgModal.classList.add('active');
+        setStatus('Selecciona el color del fondo a remover', false);
+        
+        // Configurar evento para seleccionar color
+        removeBgCanvas.addEventListener('click', pickRemoveBgColor);
+      }
+      
+      function pickRemoveBgColor(e) {
+        if (!originalImageData) return;
+        
+        const rect = removeBgCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const ctx = removeBgCanvas.getContext('2d');
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        
+        applyRemoveBgPreview([pixel[0], pixel[1], pixel[2]]);
+      }
+      
+      function applyRemoveBgPreview(targetColor) {
+        if (!originalImageData) return;
+        
+        const tolerance = parseInt($('toleranceSlider').value);
+        const imageDataCopy = new ImageData(
+          new Uint8ClampedArray(originalImageData.data),
+          originalImageData.width,
+          originalImageData.height
+        );
+        
+        const data = imageDataCopy.data;
+        const r = targetColor[0];
+        const g = targetColor[1];
+        const b = targetColor[2];
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const dr = Math.abs(data[i] - r);
+          const dg = Math.abs(data[i + 1] - g);
+          const db = Math.abs(data[i + 2] - b);
+          
+          if (dr <= tolerance && dg <= tolerance && db <= tolerance) {
+            data[i + 3] = 0;
+          }
+        }
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = originalImageData.width;
+        tempCanvas.height = originalImageData.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.putImageData(imageDataCopy, 0, 0);
+        
+        const ctx = removeBgCanvas.getContext('2d');
+        const scale = Math.min(
+          removeBgCanvas.width / originalImageData.width,
+          removeBgCanvas.height / originalImageData.height
+        );
+        
+        ctx.clearRect(0, 0, removeBgCanvas.width, removeBgCanvas.height);
+        ctx.drawImage(tempCanvas, 0, 0, originalImageData.width * scale, originalImageData.height * scale);
+      }
+      
+      function applyRemoveBackground() {
+        if (!selectedImageObject || !originalImageData) return;
+        
+        setStatus('Aplicando remoción de fondo...', true);
+        
+        const targetColor = [
+          originalImageData.data[0],
+          originalImageData.data[1],
+          originalImageData.data[2]
+        ];
+        
+        const tolerance = parseInt($('toleranceSlider').value);
+        const imageDataCopy = new ImageData(
+          new Uint8ClampedArray(originalImageData.data),
+          originalImageData.width,
+          originalImageData.height
+        );
+        
+        const data = imageDataCopy.data;
+        const r = targetColor[0];
+        const g = targetColor[1];
+        const b = targetColor[2];
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const dr = Math.abs(data[i] - r);
+          const dg = Math.abs(data[i + 1] - g);
+          const db = Math.abs(data[i + 2] - b);
+          
+          if (dr <= tolerance && dg <= tolerance && db <= tolerance) {
+            data[i + 3] = 0;
+          }
+        }
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = originalImageData.width;
+        tempCanvas.height = originalImageData.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.putImageData(imageDataCopy, 0, 0);
+        
+        const dataURL = tempCanvas.toDataURL('image/png');
+        
+        fabric.Image.fromURL(dataURL, function(img) {
+          img.set({
+            left: selectedImageObject.left,
+            top: selectedImageObject.top,
+            scaleX: selectedImageObject.scaleX,
+            scaleY: selectedImageObject.scaleY,
+            angle: selectedImageObject.angle,
+            opacity: selectedImageObject.opacity,
+            selectable: true
+          });
+          
+          currentCanvas.remove(selectedImageObject);
+          currentCanvas.add(img);
+          currentCanvas.setActiveObject(img);
+          currentCanvas.renderAll();
+          
+          removeBgModal.classList.remove('active');
+          updateElementCount();
+          setStatus('Fondo removido correctamente', false);
+        });
+      }
+      
+      function resetRemoveBgPreview() {
+        if (!selectedImageObject || !originalImageData) return;
+        
+        const ctx = removeBgCanvas.getContext('2d');
+        const imgElement = selectedImageObject._element;
+        const scale = Math.min(
+          removeBgCanvas.width / imgElement.naturalWidth,
+          removeBgCanvas.height / imgElement.naturalHeight
+        );
+        
+        ctx.clearRect(0, 0, removeBgCanvas.width, removeBgCanvas.height);
+        ctx.drawImage(imgElement, 0, 0, imgElement.naturalWidth * scale, imgElement.naturalHeight * scale);
+        
+        $('toleranceSlider').value = 30;
+        $('toleranceValue').textContent = '30';
+      }
+      
+      function exportCanvas(area) {
+        setStatus(`Exportando ${area}...`, true);
+        
+        const canvas = area === 'header' ? headerFabricCanvas : footerFabricCanvas;
+        const height = area === 'header' ? headerHeight : footerHeight;
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = docWidth;
+        tempCanvas.height = height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        tempCtx.fillStyle = 'white';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        const dataURL = canvas.toDataURL({
+          format: 'png',
+          multiplier: 1
+        });
+        
+        const img = new Image();
+        img.onload = function() {
+          tempCtx.drawImage(img, 0, 0);
+          
+          tempCanvas.toBlob(function(blob) {
+            const filename = `${area}.png`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            
+            setStatus(`${area} exportado como ${filename}`, false);
+          }, 'image/png');
+        };
+        
+        img.src = dataURL;
+      }
+      
+      function handleKeyDown(e) {
+        switch(e.key) {
+          case 'v':
+          case 'V':
+            setTool('select');
+            break;
+          case 't':
+          case 'T':
+            setTool('text');
+            break;
+          case 'r':
+          case 'R':
+            setTool('rectangle');
+            break;
+          case 'l':
+          case 'L':
+            setTool('line');
+            break;
+          case 'i':
+          case 'I':
+            setTool('image');
+            break;
+          case 'h':
+          case 'H':
+            setTool('hand');
+            break;
+          case 'Delete':
+          case 'Backspace':
+            deleteSelected();
+            break;
+          case '+':
+          case '=':
+            if (e.ctrlKey) adjustZoom(0.1);
+            break;
+          case '-':
+          case '_':
+            if (e.ctrlKey) adjustZoom(-0.1);
+            break;
+          case '0':
+            if (e.ctrlKey) setZoom(1.0);
+            break;
+          case 'Escape':
+            if (isCropping) {
+              cancelCrop();
+            }
+            break;
+          case 'Enter':
+            if (isCropping && cropRect) {
+              applyCrop();
+            }
+            break;
+        }
+      }
+      
+      function setStatus(message, spinning = false) {
+        statusText.textContent = message;
+        statusBox.classList.toggle('spin', spinning);
+      }
+      
+      function updateUI() {
+        setZoom(0.8);
+        setTool('select');
+        switchArea('header');
+        updateElementCount();
+      }
+      
+      // Inicializar la aplicación
+      init();
+    })();
+  </script>
+</body>
+</html>

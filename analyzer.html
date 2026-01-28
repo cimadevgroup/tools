@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Analista de Proyecto — Suite</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <style>
+    :root{
+      --bg0:#050A07; --bg1:#07130E;
+      --glass: rgba(255,255,255,.08);
+      --glass2: rgba(255,255,255,.05);
+      --stroke: rgba(255,255,255,.16);
+      --stroke2: rgba(255,255,255,.10);
+      --text: rgba(255,255,255,.88);
+      --muted: rgba(255,255,255,.62);
+      --good: rgba(120, 255, 190, .92);
+      --warn: rgba(255, 210, 120, .92);
+      --bad: rgba(255, 120, 140, .92);
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(900px 600px at 18% 12%, rgba(70,255,170,.10), transparent 60%),
+        radial-gradient(900px 600px at 82% 30%, rgba(90,170,255,.09), transparent 60%),
+        radial-gradient(900px 600px at 55% 90%, rgba(120,255,190,.07), transparent 65%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow-x:hidden;
+    }
+    #matrixCanvas{
+      position: fixed; inset: 0; z-index: 0;
+      opacity: .85; pointer-events:none;
+      filter: saturate(120%) contrast(110%);
+      mix-blend-mode: screen;
+    }
+    .vignette{
+      position: fixed; inset: 0; z-index: 1; pointer-events:none;
+      background:
+        radial-gradient(1200px 800px at 50% 35%, rgba(0,0,0,.22), rgba(0,0,0,.55) 70%),
+        linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.35));
+    }
+    .goo{
+      position: fixed; inset: -40px; z-index: 2; pointer-events:none;
+      filter: blur(28px) saturate(130%);
+      opacity:.55; mix-blend-mode: screen;
+    }
+    .blob{ position:absolute; border-radius: 999px; animation: drift 16s ease-in-out infinite; }
+    .b1{ width:380px;height:380px; left:7%; top:14%;
+      background: radial-gradient(circle at 35% 35%, rgba(90,255,190,.25), rgba(90,255,190,0) 65%); }
+    .b2{ width:420px;height:420px; right:6%; top:18%; animation-duration: 19s;
+      background: radial-gradient(circle at 40% 40%, rgba(90,170,255,.22), rgba(90,170,255,0) 68%); }
+    .b3{ width:460px;height:460px; left:38%; bottom:6%; animation-duration: 22s;
+      background: radial-gradient(circle at 40% 40%, rgba(120,255,190,.18), rgba(120,255,190,0) 70%); }
+    @keyframes drift{
+      0%{ transform: translate(0,0) scale(1); }
+      35%{ transform: translate(28px,-22px) scale(1.05); }
+      70%{ transform: translate(-22px,18px) scale(0.98); }
+      100%{ transform: translate(0,0) scale(1); }
+    }
+
+    .wrap{ max-width: 1320px; margin: 0 auto; padding: 28px 18px 40px; position:relative; z-index: 3; }
+    header{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom: 14px; }
+    h1{ margin:0; font-weight: 820; letter-spacing: .2px; font-size: clamp(22px, 2.8vw, 34px); }
+    .subtitle{ margin-top: 6px; color: var(--muted); font-size: 13.5px; line-height: 1.35; max-width: 880px; }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 10px 12px; border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      border: 1px solid var(--stroke2);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      user-select:none; font-size: 12.5px; color: rgba(255,255,255,.8); white-space:nowrap;
+    }
+    .dot{ width:9px;height:9px;border-radius:999px; background: rgba(120,255,190,.8); box-shadow: 0 0 0 3px rgba(120,255,190,.15); }
+
+    .appTabs{ display:flex; gap:10px; flex-wrap:wrap; margin: 6px 0 14px; }
+    .appTab{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.16);
+      color: rgba(255,255,255,.80);
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size: 12.8px;
+      font-weight: 800;
+      cursor:pointer;
+      user-select:none;
+      transition: transform .12s ease, border-color .12s ease;
+    }
+    .appTab:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.26); }
+    .appTab.active{
+      background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+      border-color: rgba(255,255,255,.30);
+      color: rgba(255,255,255,.92);
+    }
+    .view{ display:none; }
+    .view.active{ display:block; }
+
+    .card{
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      overflow:hidden; position:relative;
+    }
+    .card::before{
+      content:""; position:absolute; inset:-1px; pointer-events:none; opacity:.9;
+      background: radial-gradient(900px 300px at 20% 0%, rgba(255,255,255,.10), transparent 65%),
+                  radial-gradient(900px 300px at 80% 0%, rgba(255,255,255,.07), transparent 65%);
+    }
+    .card > *{ position:relative; }
+    .card-h{
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .card-h h2{ margin:0; font-size: 14px; letter-spacing:.25px; color: rgba(255,255,255,.85); font-weight: 780; }
+    .card-b{ padding: 14px 16px 16px; }
+
+    .grid2{ display:grid; grid-template-columns: 420px 1fr; gap: 14px; }
+    @media (max-width: 980px){ .grid2{ grid-template-columns: 1fr; } }
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .col{ display:flex; flex-direction:column; gap:8px; }
+    .meta{ font-size: 12.5px; color: var(--muted); line-height:1.35; }
+    .small{ font-size: 12px; color: rgba(255,255,255,.58); }
+
+    .btn{
+      appearance:none; border: 1px solid rgba(255,255,255,.16);
+      border-radius: 14px; padding: 10px 12px;
+      color: rgba(255,255,255,.88);
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.28);
+      cursor:pointer; font-weight: 780; font-size: 13px;
+      transition: transform .12s ease, border-color .12s ease, opacity .12s ease;
+      user-select:none;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.28); }
+    .btn:active{ transform: translateY(0); }
+    .btn[disabled]{ opacity:.45; cursor:not-allowed; transform:none; }
+    .btn.secondary{
+      background: rgba(0,0,0,.18);
+      border-color: rgba(255,255,255,.12);
+      box-shadow:none; font-weight: 730;
+    }
+
+    input[type="file"]{
+      width: 100%;
+      padding: 10px;
+      border-radius: 12px;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border: 1px dashed rgba(255,255,255,.22);
+      outline:none;
+    }
+    input[type="text"]{
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      color: rgba(255,255,255,.86);
+      background: rgba(0,0,0,.22);
+      border: 1px solid rgba(255,255,255,.14);
+      outline:none;
+      font-family: var(--mono);
+      font-size: 12.8px;
+    }
+
+    textarea{
+      width:100%;
+      min-height: 250px;
+      resize: vertical;
+      border-radius: 14px;
+      padding: 12px 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.20);
+      color: rgba(255,255,255,.86);
+      outline:none;
+      font-family: var(--mono);
+      font-size: 12.8px;
+      line-height: 1.45;
+      white-space: pre;
+      overflow:auto;
+    }
+
+    .kpi{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
+    .kpi .tag{
+      font-size: 12.5px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.75);
+      white-space:nowrap;
+    }
+
+    .status{ font-size: 12.5px; color: rgba(255,255,255,.8); display:flex; gap:10px; align-items:center; }
+    .spinner{
+      width: 14px; height:14px; border-radius:999px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-top-color: rgba(255,255,255,.85);
+      animation: spin .85s linear infinite;
+      display:none;
+    }
+    .spin .spinner{ display:inline-block; }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
+
+    .hint{
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.16);
+      color: rgba(255,255,255,.70);
+      font-size: 12.8px;
+      line-height: 1.35;
+    }
+
+    pre.tree{
+      margin: 0;
+      padding: 10px 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.18);
+      border: 1px solid rgba(255,255,255,.10);
+      overflow:auto;
+      max-height: 520px;
+      font-family: var(--mono);
+      font-size: 12.6px;
+      line-height: 1.35;
+      color: rgba(255,255,255,.85);
+      white-space: pre;
+    }
+
+    .list{
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      background: rgba(0,0,0,.16);
+      overflow:hidden;
+    }
+    .list .item{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      padding: 10px 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      user-select:none;
+    }
+    .list .item:first-child{ border-top:none; }
+    .list .item:hover{ background: rgba(255,255,255,.05); }
+    .list .name{
+      font-weight: 820;
+      color: rgba(255,255,255,.86);
+      font-size: 12.8px;
+      line-height:1.2;
+      word-break: break-word;
+    }
+    .list .sub{
+      margin-top: 3px;
+      color: rgba(255,255,255,.62);
+      font-size: 12px;
+      line-height:1.25;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+    }
+    .pill2{
+      font-size: 11.5px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.16);
+      color: rgba(255,255,255,.70);
+      white-space:nowrap;
+    }
+    .right{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .chk{
+      width: 18px; height: 18px;
+      accent-color: rgba(120,255,190,.9);
+      cursor:pointer;
+    }
+    .row-tight{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    /* mini toggle */
+    .toggle{
+      display:flex; align-items:center; gap:10px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.14);
+      color: rgba(255,255,255,.75);
+      font-size: 12.4px;
+      user-select:none;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="matrixCanvas" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="goo" aria-hidden="true">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  </div>
+
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Analista de Proyecto — Suite</h1>
+        <div class="subtitle">Analyzer + Reader + Comparator, todo local en tu navegador.</div>
+      </div>
+      <div class="pill"><span class="dot"></span><span>Procesamiento local</span></div>
+    </header>
+
+    <div class="appTabs" role="tablist" aria-label="Aplicaciones">
+      <div class="appTab">Analyzer</div>
+      <div class="appTab active">Reader</div>
+      <div class="appTab">Comparator</div>
+    </div>
+
+    <!-- (Aquí solo incluyo Reader, para enfocarnos en el cambio solicitado) -->
+    <div class="view active" id="view-reader">
+      <div class="grid2">
+        <section class="card">
+          <div class="card-h">
+            <h2>Reader (ZIP → TXT con selección)</h2>
+            <div class="status" id="rd_statusBox">
+              <span class="spinner"></span>
+              <span id="rd_statusText" class="small">Listo</span>
+            </div>
+          </div>
+
+          <div class="card-b">
+            <div class="col" style="gap:10px;">
+              <div class="meta"><b>ZIP</b> (selecciona)</div>
+              <input id="rd_zipInput" type="file" accept=".zip,application/zip" />
+
+              <div class="row">
+                <button class="btn" id="rd_btnScan" disabled>Leer ZIP</button>
+                <button class="btn" id="rd_btnGenerate" disabled>Generar TXT (snapshot)</button>
+                <button class="btn secondary" id="rd_btnDownload" disabled>Descargar .txt</button>
+                <button class="btn secondary" id="rd_btnCopy" disabled>Copiar</button>
+                <button class="btn secondary" id="rd_btnClear">Limpiar</button>
+              </div>
+
+              <div class="kpi">
+                <div class="tag">Archivos ZIP: <b id="rd_kFiles">—</b></div>
+                <div class="tag">Seleccionados: <b id="rd_kSel">—</b></div>
+                <div class="tag">Carpetas: <b id="rd_kDirs">—</b></div>
+                <div class="tag">TXT: <b id="rd_kSize">—</b></div>
+              </div>
+
+              <div class="hint">
+                Flujo recomendado:
+                <b>1)</b> “Leer ZIP” (arma la lista) → <b>2)</b> marcas archivos → <b>3)</b> “Generar TXT”.
+                <br/>Binarios se incluyen como <b>[BINARIO OMITIDO]</b> si los seleccionas.
+              </div>
+
+              <div class="monobox">
+                <div class="mh"><div class="t">File tree</div><div class="pill2">preview</div></div>
+                <div class="mb"><pre class="tree" id="rd_treeBox">(todavía no hay ZIP leído)</pre></div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-h">
+            <h2>Selección de archivos + Salida TXT</h2>
+            <div class="small" id="rd_outHint">Lee el ZIP para ver la lista.</div>
+          </div>
+
+          <div class="card-b">
+            <div class="row-tight" style="margin-bottom:10px;">
+              <input id="rd_filter" type="text" placeholder="Filtrar (ej: .js, index.html, /assets/, config)" />
+              <button class="btn secondary" id="rd_selAll" disabled>Todo</button>
+              <button class="btn secondary" id="rd_selNone" disabled>Ninguno</button>
+              <button class="btn secondary" id="rd_selCode" disabled>Solo código</button>
+              <button class="btn secondary" id="rd_selText" disabled>Solo texto</button>
+            </div>
+
+            <div class="row-tight" style="margin-bottom:10px;">
+              <label class="toggle">
+                <input id="rd_includeTree" type="checkbox" checked class="chk" />
+                Incluir file tree en el TXT
+              </label>
+              <label class="toggle">
+                <input id="rd_includeBinaries" type="checkbox" checked class="chk" />
+                Incluir binarios seleccionados como “[BINARIO OMITIDO]”
+              </label>
+            </div>
+
+            <div class="list" id="rd_fileList" style="max-height:300px; overflow:auto; margin-bottom:10px;">
+              <div class="item" style="cursor:default;">
+                <div>
+                  <div class="name">Archivos</div>
+                  <div class="sub">Aquí aparecerá la lista después de “Leer ZIP”.</div>
+                </div>
+                <div class="right"><span class="pill2">—</span></div>
+              </div>
+            </div>
+
+            <textarea id="rd_outText" placeholder="(aquí aparecerá el TXT generado)" spellcheck="false"></textarea>
+
+            <div class="meta" style="margin-top:10px;">
+              Formato:
+              <span class="small">----------[ruta/archivo.ext]----------</span><br/>
+              <span class="small">[código del archivo]</span><br/>
+              <span class="small">----------fin de archivo----------</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ---------- Shared utils ----------
+    const U = (() => {
+      const normNL = (s) => String(s ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const humanBytes = (bytes) => {
+        if (!Number.isFinite(bytes)) return "—";
+        const units = ["B","KB","MB","GB"];
+        let v = bytes, i = 0;
+        while (v >= 1024 && i < units.length-1){ v/=1024; i++; }
+        const dec = (i === 0) ? 0 : 2;
+        return v.toFixed(dec) + " " + units[i];
+      };
+      const escapeHtml = (str) => String(str)
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+      const blobDownload = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url), 1200);
+      };
+
+      return { normNL, humanBytes, escapeHtml, blobDownload };
+    })();
+
+    // ---------- Matrix background ----------
+    (function(){
+      const canvas = document.getElementById("matrixCanvas");
+      const ctx = canvas.getContext("2d", { alpha: true });
+      let w=0,h=0,cols=0,fontSize=16,drops=[];
+      const glyphs = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&*+-/<>";
+
+      function resize(){
+        w = canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+        h = canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+        const scale = (window.devicePixelRatio || 1);
+        ctx.setTransform(scale,0,0,scale,0,0);
+        fontSize = Math.max(14, Math.floor(Math.min(window.innerWidth, window.innerHeight) / 55));
+        cols = Math.floor(window.innerWidth / fontSize);
+        drops = new Array(cols).fill(0).map(()=>Math.random()*window.innerHeight/fontSize);
+      }
+      window.addEventListener("resize", resize, { passive:true });
+      resize();
+
+      let last = performance.now();
+      function tick(now){
+        const dt = Math.min(50, now - last); last = now;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        ctx.font = `${fontSize}px monospace`;
+
+        for (let i=0;i<cols;i++){
+          const x = i * fontSize;
+          const y = drops[i] * fontSize;
+          ctx.fillStyle = "rgba(120, 255, 190, 0.78)";
+          const ch = glyphs[Math.floor(Math.random()*glyphs.length)];
+          ctx.fillText(ch, x, y);
+          if (y > window.innerHeight && Math.random() > 0.975) drops[i] = 0;
+          drops[i] += (dt / 16) * (0.9 + Math.random()*0.8);
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+
+    // ============================================================
+    // READER (ZIP -> select -> TXT)
+    // ============================================================
+    (function(){
+      const $ = (id) => document.getElementById(id);
+
+      const zipInput = $("rd_zipInput");
+      const btnScan = $("rd_btnScan");
+      const btnGenerate = $("rd_btnGenerate");
+      const btnDownload = $("rd_btnDownload");
+      const btnCopy = $("rd_btnCopy");
+      const btnClear = $("rd_btnClear");
+
+      const outText = $("rd_outText");
+      const treeBox = $("rd_treeBox");
+      const fileList = $("rd_fileList");
+      const outHint = $("rd_outHint");
+
+      const filter = $("rd_filter");
+      const selAll = $("rd_selAll");
+      const selNone = $("rd_selNone");
+      const selCode = $("rd_selCode");
+      const selText = $("rd_selText");
+
+      const includeTree = $("rd_includeTree");
+      const includeBinaries = $("rd_includeBinaries");
+
+      const kFiles = $("rd_kFiles");
+      const kSel  = $("rd_kSel");
+      const kDirs = $("rd_kDirs");
+      const kSize = $("rd_kSize");
+
+      const statusBox = $("rd_statusBox");
+      const statusText = $("rd_statusText");
+
+      let ZIP = null;
+      let FILES = []; // {path, entry}
+      let DIRS = new Set();
+      let SELECTED = new Set(); // path
+      let lastBlob = null;
+      let lastFilename = "analista_de_proyecto.txt";
+
+      function setStatus(msg, spinning=false){
+        statusText.textContent = msg;
+        statusBox.classList.toggle('spin', !!spinning);
+      }
+
+      function buildTree(paths){
+        const root = { children: new Map(), isFile:false };
+        for (const p of paths){
+          const parts = p.split('/').filter(Boolean);
+          let node = root;
+          for (let i=0;i<parts.length;i++){
+            const name = parts[i];
+            const isLast = (i === parts.length-1);
+            if (!node.children.has(name)){
+              node.children.set(name, { children: new Map(), isFile: isLast });
+            }
+            node = node.children.get(name);
+            if (isLast) node.isFile = true;
+          }
+        }
+        function sortEntries(map){
+          const arr = [...map.entries()];
+          arr.sort((a,b)=>{
+            const A=a[1], B=b[1];
+            if (A.isFile !== B.isFile) return A.isFile ? 1 : -1;
+            return a[0].localeCompare(b[0], 'es', { numeric:true, sensitivity:'base' });
+          });
+          return arr;
+        }
+        function render(node, prefix=""){
+          const entries = sortEntries(node.children);
+          let out = "";
+          entries.forEach(([name, child], idx)=>{
+            const last = idx === entries.length-1;
+            const branch = last ? "└── " : "├── ";
+            out += prefix + branch + name + (child.isFile ? "" : "/") + "\n";
+            const nextPrefix = prefix + (last ? "    " : "│   ");
+            if (!child.isFile && child.children.size){
+              out += render(child, nextPrefix);
+            }
+          });
+          return out;
+        }
+        return render(root).trimEnd() || "(vacío)";
+      }
+
+      function looksBinary(u8){
+        const len = u8.length;
+        if (len === 0) return false;
+        const sample = u8.subarray(0, Math.min(len, 8000));
+        for (let i=0;i<sample.length;i++) if (sample[i] === 0) return true;
+        try{ new TextDecoder('utf-8', { fatal:true }).decode(sample); return false; }
+        catch{ return true; }
+      }
+
+      function extOf(path){
+        const lower = path.toLowerCase();
+        if (lower.endsWith("dockerfile")) return "dockerfile";
+        const base = lower.split("/").pop() || "";
+        if (!base.includes(".")) return "";
+        return base.split(".").pop() || "";
+      }
+
+      function isCodeLike(path){
+        const e = extOf(path);
+        return ["js","mjs","cjs","ts","tsx","jsx","py","php","java","kt","kts","go","rs","c","h","cpp","hpp","cs","swift","sql","sh","ps1","bat","html","htm","css","xml","svg","json","yml","yaml","env","ini","cfg","conf","dockerfile"].includes(e)
+          || path.toLowerCase().endsWith(".gitignore");
+      }
+
+      function isTextDoc(path){
+        const e = extOf(path);
+        return ["txt","md","markdown","rst","log"].includes(e);
+      }
+
+      function enableSelectionControls(on){
+        [selAll, selNone, selCode, selText, filter].forEach(el => el.disabled = !on);
+      }
+
+      function updateKPIs(){
+        kFiles.textContent = FILES.length ? String(FILES.length) : "—";
+        kSel.textContent = FILES.length ? String(SELECTED.size) : "—";
+        kDirs.textContent = DIRS.size ? String(DIRS.size) : "—";
+        if (lastBlob) kSize.textContent = U.humanBytes(lastBlob.size);
+        else kSize.textContent = "—";
+      }
+
+      function renderList(){
+        const q = (filter.value || "").trim().toLowerCase();
+        const rows = FILES.filter(f => !q || f.path.toLowerCase().includes(q));
+
+        fileList.innerHTML = "";
+        const frag = document.createDocumentFragment();
+
+        if (!rows.length){
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `
+            <div>
+              <div class="name">Sin coincidencias</div>
+              <div class="sub">Prueba con otro filtro.</div>
+            </div>
+            <div class="right"><span class="pill2">0</span></div>
+          `;
+          frag.appendChild(el);
+          fileList.appendChild(frag);
+          return;
+        }
+
+        for (const r of rows){
+          const checked = SELECTED.has(r.path);
+          const e = extOf(r.path) || "(none)";
+          const kind = isCodeLike(r.path) ? "code" : (isTextDoc(r.path) ? "text" : "other");
+
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `
+            <input class="chk" type="checkbox" ${checked ? "checked" : ""} aria-label="Seleccionar ${U.escapeHtml(r.path)}">
+            <div style="min-width:0;">
+              <div class="name">${U.escapeHtml(r.path)}</div>
+              <div class="sub">${kind === "code" ? "Código/Config" : (kind === "text" ? "Documento" : "Otro")}</div>
+            </div>
+            <div class="right">
+              <span class="pill2">${U.escapeHtml(e)}</span>
+            </div>
+          `;
+          const cb = el.querySelector("input[type=checkbox]");
+          cb.addEventListener("change", () => {
+            if (cb.checked) SELECTED.add(r.path);
+            else SELECTED.delete(r.path);
+            updateKPIs();
+            btnGenerate.disabled = (SELECTED.size === 0);
+          });
+
+          frag.appendChild(el);
+        }
+
+        fileList.appendChild(frag);
+      }
+
+      filter.addEventListener("input", renderList);
+
+      function setSelection(mode){
+        if (!FILES.length) return;
+        if (mode === "all"){
+          SELECTED = new Set(FILES.map(f=>f.path));
+        } else if (mode === "none"){
+          SELECTED = new Set();
+        } else if (mode === "code"){
+          SELECTED = new Set(FILES.filter(f => isCodeLike(f.path)).map(f=>f.path));
+        } else if (mode === "text"){
+          SELECTED = new Set(FILES.filter(f => isTextDoc(f.path)).map(f=>f.path));
+        }
+        renderList();
+        updateKPIs();
+        btnGenerate.disabled = (SELECTED.size === 0);
+      }
+
+      selAll.addEventListener("click", ()=>setSelection("all"));
+      selNone.addEventListener("click", ()=>setSelection("none"));
+      selCode.addEventListener("click", ()=>setSelection("code"));
+      selText.addEventListener("click", ()=>setSelection("text"));
+
+      zipInput.addEventListener("change", () => {
+        const f = zipInput.files && zipInput.files[0];
+        btnScan.disabled = !f;
+        btnGenerate.disabled = true;
+        btnDownload.disabled = true;
+        btnCopy.disabled = true;
+        outText.value = "";
+        lastBlob = null;
+
+        FILES = [];
+        DIRS = new Set();
+        SELECTED = new Set();
+        ZIP = null;
+
+        enableSelectionControls(false);
+        fileList.innerHTML = `
+          <div class="item" style="cursor:default;">
+            <div>
+              <div class="name">Archivos</div>
+              <div class="sub">Presiona “Leer ZIP” para cargar la lista.</div>
+            </div>
+            <div class="right"><span class="pill2">—</span></div>
+          </div>
+        `;
+        treeBox.textContent = "(todavía no hay ZIP leído)";
+        updateKPIs();
+
+        if (f){
+          lastFilename = (f.name.replace(/\.zip$/i,"") || "analista_de_proyecto") + ".txt";
+          setStatus(`ZIP seleccionado: ${f.name}`, false);
+          outHint.textContent = "Presiona “Leer ZIP” para armar el listado.";
+        } else {
+          setStatus("Listo", false);
+          outHint.textContent = "Lee el ZIP para ver la lista.";
+        }
+      });
+
+      btnClear.addEventListener("click", () => {
+        zipInput.value = "";
+        btnScan.disabled = true;
+        btnGenerate.disabled = true;
+        btnDownload.disabled = true;
+        btnCopy.disabled = true;
+        outText.value = "";
+        lastBlob = null;
+
+        FILES = [];
+        DIRS = new Set();
+        SELECTED = new Set();
+        ZIP = null;
+
+        enableSelectionControls(false);
+        filter.value = "";
+        includeTree.checked = true;
+        includeBinaries.checked = true;
+
+        treeBox.textContent = "(todavía no hay ZIP leído)";
+        fileList.innerHTML = `
+          <div class="item" style="cursor:default;">
+            <div>
+              <div class="name">Archivos</div>
+              <div class="sub">Aquí aparecerá la lista después de “Leer ZIP”.</div>
+            </div>
+            <div class="right"><span class="pill2">—</span></div>
+          </div>
+        `;
+        updateKPIs();
+        setStatus("Listo", false);
+        outHint.textContent = "Lee el ZIP para ver la lista.";
+      });
+
+      btnCopy.addEventListener("click", async () => {
+        const txt = outText.value || "";
+        if (!txt) return;
+        try{
+          await navigator.clipboard.writeText(txt);
+          setStatus("Copiado al portapapeles", false);
+          setTimeout(()=>setStatus("Listo", false), 900);
+        }catch{
+          setStatus("No se pudo copiar (permiso del navegador)", false);
+        }
+      });
+
+      btnDownload.addEventListener("click", () => {
+        if (!lastBlob) return;
+        U.blobDownload(lastBlob, lastFilename);
+      });
+
+      btnScan.addEventListener("click", async () => {
+        const f = zipInput.files && zipInput.files[0];
+        if (!f) return;
+
+        setStatus("Leyendo ZIP…", true);
+        btnScan.disabled = true;
+        btnGenerate.disabled = true;
+        btnDownload.disabled = true;
+        btnCopy.disabled = true;
+        outText.value = "";
+        lastBlob = null;
+
+        try{
+          const buf = await f.arrayBuffer();
+          ZIP = await JSZip.loadAsync(buf);
+
+          FILES = [];
+          DIRS = new Set();
+
+          ZIP.forEach((relativePath, entry) => {
+            if (entry.dir){
+              if (relativePath && relativePath !== "/") DIRS.add(relativePath.replace(/\/+$/,"") + "/");
+            } else {
+              FILES.push({ path: relativePath, entry });
+              const parts = relativePath.split('/').filter(Boolean);
+              let acc = "";
+              for (let i=0;i<parts.length-1;i++){
+                acc += parts[i] + "/";
+                DIRS.add(acc);
+              }
+            }
+          });
+
+          FILES.sort((a,b)=>a.path.localeCompare(b.path, 'es', { numeric:true, sensitivity:'base' }));
+
+          const tree = buildTree(FILES.map(x=>x.path));
+          treeBox.textContent = tree;
+
+          // Default selection: code-like (common expectation)
+          SELECTED = new Set(FILES.filter(f => isCodeLike(f.path)).map(f=>f.path));
+
+          enableSelectionControls(true);
+          [selAll, selNone, selCode, selText].forEach(b => b.disabled = false);
+
+          renderList();
+          updateKPIs();
+
+          btnGenerate.disabled = (SELECTED.size === 0);
+          outHint.textContent = "Marca/desmarca archivos y genera el TXT.";
+          setStatus("Listo. Selecciona archivos y genera el snapshot.", false);
+        }catch(e){
+          console.error(e);
+          setStatus("Error: ZIP inválido o no se pudo leer.", false);
+          outHint.textContent = "No se pudo leer el ZIP.";
+        }finally{
+          btnScan.disabled = !(zipInput.files && zipInput.files[0]);
+          statusBox.classList.remove("spin");
+        }
+      });
+
+      btnGenerate.addEventListener("click", async () => {
+        if (!ZIP || !FILES.length){
+          setStatus("Primero presiona “Leer ZIP”.", false);
+          return;
+        }
+        if (SELECTED.size === 0){
+          setStatus("Selecciona al menos un archivo.", false);
+          return;
+        }
+
+        setStatus("Generando TXT…", true);
+        btnGenerate.disabled = true;
+        btnDownload.disabled = true;
+        btnCopy.disabled = true;
+        outText.value = "";
+        lastBlob = null;
+
+        try{
+          const selectedFiles = FILES.filter(f => SELECTED.has(f.path));
+          const treeAll = buildTree(FILES.map(x=>x.path));
+          const treeSel = buildTree(selectedFiles.map(x=>x.path));
+
+          const decoder = new TextDecoder("utf-8", { fatal:false });
+
+          const lines = [];
+          if (includeTree.checked){
+            lines.push("=== ESTRUCTURA DEL ZIP (FILE TREE) ===");
+            lines.push(treeAll);
+            lines.push("");
+            lines.push("=== ESTRUCTURA SELECCIONADA (FILE TREE) ===");
+            lines.push(treeSel);
+            lines.push("");
+          }
+          lines.push("=== CONTENIDO DE ARCHIVOS ===");
+          lines.push("");
+
+          let omittedBinary = 0;
+
+          for (const f of selectedFiles){
+            lines.push(`----------[${f.path}]----------`);
+            const u8 = await ZIP.file(f.path).async("uint8array");
+            const bin = looksBinary(u8);
+
+            if (bin){
+              if (includeBinaries.checked){
+                omittedBinary++;
+                lines.push("[BINARIO OMITIDO]");
+                lines.push(`Tamaño: ${U.humanBytes(u8.length)}`);
+              } else {
+                lines.push("[BINARIO EXCLUIDO POR CONFIGURACIÓN]");
+              }
+            } else {
+              const text = decoder.decode(u8);
+              lines.push(U.normNL(text));
+            }
+
+            lines.push("----------fin de archivo----------");
+            lines.push("");
+          }
+
+          const full = lines.join("\n");
+          outText.value = full;
+
+          lastBlob = new Blob([full], { type: "text/plain;charset=utf-8" });
+          btnDownload.disabled = false;
+          btnCopy.disabled = false;
+
+          updateKPIs();
+          setStatus(omittedBinary ? `Listo. (${omittedBinary} binario(s) marcado(s))` : "Listo.", false);
+        }catch(e){
+          console.error(e);
+          setStatus("Error generando el TXT. Revisa consola.", false);
+        }finally{
+          btnGenerate.disabled = (SELECTED.size === 0);
+          statusBox.classList.remove("spin");
+        }
+      });
+    })();
+
+    // ---------- top tabs (minimal; Reader active by default here) ----------
+    (function(){
+      const tabs = document.querySelectorAll(".appTab");
+      const reader = document.getElementById("view-reader");
+      tabs.forEach((t, idx) => {
+        t.addEventListener("click", () => {
+          tabs.forEach(x => x.classList.remove("active"));
+          t.classList.add("active");
+          // demo: keep reader visible in this compact file
+          reader.classList.add("active");
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
