@@ -2,10 +2,10 @@
 # sync.sh — copia field_rules.js y role_fields.js a los repos que los usan.
 #   ./sync.sh          escribe las copias (cabecera «COPIA… no editar aquí»)
 #   ./sync.sh --check  compara; sale con error si alguna copia falta o difiere
-# Navegador → .js tal cual (+ cabecera). Servidores (Workers) → .mjs: mismo texto + `export default`.
+# Navegador → .js tal cual (+ cabecera; phone_input.js es solo navegador). Servidores (Workers) → .mjs: mismo texto + `export default`.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DEV="$(cd "$HERE/../.." && pwd)"
+DEV="${FR_DEV:-$(cd "$HERE/../.." && pwd)}"   # FR_DEV: raíz alterna (worktrees) para probar antes de publicar
 MODE="${1:-write}"
 
 # destino | fuente | global
@@ -20,6 +20,9 @@ TARGETS=(
   "base-server/worker/role_fields.mjs|role_fields|RoleFields"
   "cima-desktop/app/ui/role_fields.js|role_fields|RoleFields"
   "cima-server/role_fields.mjs|role_fields|RoleFields"
+  "cima-desktop/app/ui/phone_input.js|phone_input|PhoneInput"
+  "base-desktop/modules/phone_input.js|phone_input|PhoneInput"
+  "cima-landing/app/landing/phone_input.js|phone_input|PhoneInput"
 )
 
 render() { # fuente global destino → stdout

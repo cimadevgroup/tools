@@ -292,3 +292,36 @@ test('las dos salidas funcionan como script clásico y como módulo', async () =
   vm.runInNewContext(fs.readFileSync(new URL('./field_rules.js', import.meta.url), 'utf8'), ctx);
   assert.equal(ctx.FieldRules.check('doc', 'V-00012345').value, 'V-12345');
 });
+
+// ── phoneParts (selector de país del campo de teléfono) ──
+test('phoneParts: vacío → país por defecto (VE) y número vacío', () => {
+  assert.deepEqual(FR.phoneParts(''), { iso: 'VE', code: '58', national: '' });
+  assert.deepEqual(FR.phoneParts(null, { defaultCountry: 'CO' }), { iso: 'CO', code: '57', national: '' });
+});
+test('phoneParts: 0414 912 4022 sin + → VE, número nacional sin el 0', () => {
+  assert.deepEqual(FR.phoneParts('0414 912 4022'), { iso: 'VE', code: '58', national: '4149124022' });
+});
+test('phoneParts: +58 0414… quita el 0 sobrante solo en Venezuela', () => {
+  assert.equal(FR.phoneParts('+58 0414 9124022').national, '4149124022');
+});
+test('phoneParts: +57 300 123 4567 → Colombia', () => {
+  assert.deepEqual(FR.phoneParts('+57 300 123 4567'), { iso: 'CO', code: '57', national: '3001234567' });
+});
+test('phoneParts: +13055551234 y 0013055551234 → código 1, 3055551234', () => {
+  assert.equal(FR.phoneParts('+13055551234').code, '1');
+  assert.equal(FR.phoneParts('+13055551234').national, '3055551234');
+  assert.equal(FR.phoneParts('0013055551234').national, '3055551234');
+});
+test('phoneParts: el prefijo más largo gana (+507 Panamá, no +50…)', () => {
+  assert.deepEqual(FR.phoneParts('+507 6123-4567'), { iso: 'PA', code: '507', national: '61234567' });
+});
+test('phoneParts: 58 + 10 dígitos sin + se toma como Venezuela', () => {
+  assert.deepEqual(FR.phoneParts('584149124022'), { iso: 'VE', code: '58', national: '4149124022' });
+});
+test('phoneParts: código fuera de la lista devuelve código sin país', () => {
+  const r = FR.phoneParts('+972 50 123 4567');
+  assert.equal(r.iso, ''); assert.equal(r.code, '972'); assert.equal(r.national, '501234567');
+});
+test('phoneParts: número local sin 0 usa el país por defecto elegido', () => {
+  assert.deepEqual(FR.phoneParts('3001234567', { defaultCountry: 'CO' }), { iso: 'CO', code: '57', national: '3001234567' });
+});

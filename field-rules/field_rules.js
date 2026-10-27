@@ -4,6 +4,7 @@
  *
  *   FieldRules.check(type, value, opts)  → { ok, value, msg }
  *   FieldRules.checkAll({campo:{type,value,opts}}) → { ok, values, errors:{campo:msg} }
+ *   FieldRules.phoneParts(v, {defaultCountry}) → { iso, code, national }   (para el selector de país)
  *   FieldRules.COUNTRIES, FieldRules.docDigits(v)
  *
  * value = dato normalizado listo para guardar; msg = mensaje en español para mostrar bajo el campo.
@@ -80,6 +81,29 @@
     if (d.length < 8) return bad('Faltan dígitos: un número internacional lleva entre 8 y 15.', '+' + d);
     if (d.length > 15) return bad('Sobran dígitos: un número internacional lleva entre 8 y 15.', '+' + d);
     return ok('+' + d);
+  }
+
+  // Parte un teléfono en país + número nacional con la MISMA detección que `phone` (prefijo más largo,
+  // 0 tras +58, 00…). No valida: sirve para pintar el selector de país de un campo de teléfono.
+  // opts.defaultCountry: ISO («VE») o código («58»). Vacío → país por defecto y national ''.
+  function phoneParts(v, opts) {
+    const dflt = String((opts && opts.defaultCountry) || 'VE');
+    const dc = COUNTRIES.find((c) => c.iso === dflt.toUpperCase()) || COUNTRIES.find((c) => c.code === dflt) || COUNTRIES[0];
+    const raw = str(v).trim();
+    let d = raw.replace(/\D/g, '');
+    if (!d) return { iso: dc.iso, code: dc.code, national: '' };
+    if (raw.startsWith('+')) { /* explícito */ }
+    else if (d.startsWith('00')) d = d.slice(2);
+    else if (d.startsWith('0')) d = dc.code + d.replace(/^0+/, '');
+    else if (!(d.length === 12 && d.startsWith('58'))) d = dc.code + d;
+    const c = countryByDigits(d);
+    if (c) {
+      let national = d.slice(c.code.length);
+      if (c.iso === 'VE') national = national.replace(/^0+/, '');
+      return { iso: c.iso, code: c.code, national };
+    }
+    const code = d.slice(0, Math.min(3, Math.max(1, d.length - 8)));
+    return { iso: '', code, national: d.slice(code.length) };
   }
 
   // ── documento de identidad ───────────────────────────────────────────────
@@ -275,7 +299,7 @@
     return { ok: all, values, errors };
   }
 
-  const FR = { check, checkAll, docDigits, COUNTRIES, TYPES: Object.keys(TYPES) };
+  const FR = { check, checkAll, docDigits, phoneParts, COUNTRIES, TYPES: Object.keys(TYPES) };
   if (typeof module === 'object' && module && module.exports) module.exports = FR;
   root.FieldRules = FR;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
