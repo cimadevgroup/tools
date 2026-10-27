@@ -50,6 +50,23 @@ table('phone', [
   ['abc', {}, false],
   ['', {}, true, '']
 ]);
+test('phone: +58 0414 (el 0 tras el código sobra, solo en Venezuela)', () => {
+  assert.equal(FR.check('phone', '+58 0414 9124022').value, '+584149124022');
+  assert.equal(FR.check('phone', '+58 0414 9124022').ok, true);
+});
+test('phone: 12 dígitos que empiezan por 58 sin + se toman como +58', () => {
+  assert.equal(FR.check('phone', '58 414 9124022').value, '+584149124022');
+});
+test('phone: tras +58 debe empezar con 2 o 4 (3055551234 sin + ya no se guarda como VE)', () => {
+  const r = FR.check('phone', '3055551234');
+  assert.equal(r.ok, false);
+  assert.match(r.msg, /^Ese número no parece de Venezuela; si es de otro país, escríbelo con \+ \(p\. ej\. \+1…\)\./);
+  assert.equal(FR.check('phone', '+58 212 1234567').ok, true);
+  assert.equal(FR.check('phone', '+58 3055551234').ok, false);
+});
+test('phone: Italia conserva el 0 tras el código', () => {
+  assert.equal(FR.check('phone', '+39 06 1234 5678').value, '+390612345678');
+});
 test('phone: mensajes faltan/sobran', () => {
   assert.match(FR.check('phone', '+58 414 123456').msg, /^Faltan dígitos/);
   assert.match(FR.check('phone', '+58 414 12345678').msg, /^Sobran dígitos/);

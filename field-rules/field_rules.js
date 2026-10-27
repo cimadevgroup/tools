@@ -60,10 +60,16 @@
     if (raw.startsWith('+')) { explicit = true; }
     else if (d.startsWith('00')) { d = d.slice(2); explicit = true; }
     else if (d.startsWith('0')) { d = ((opts && opts.defaultCountry) || '58') + d.replace(/^0+/, ''); }
+    else if (d.length === 12 && d.startsWith('58')) { explicit = true; }   // «58 414 9124022» sin +
     else { d = ((opts && opts.defaultCountry) || '58') + d; }
     if (d.startsWith('0')) return bad('Código de país desconocido; escríbelo con + (p. ej. +58).', raw);
     const c = countryByDigits(d);
     if (c) {
+      if (c.iso === 'VE') {
+        d = '58' + d.slice(2).replace(/^0+/, '');   // «+58 0414…»: el 0 de marcación local sobra
+        const f = d.charAt(2);
+        if (f && f !== '2' && f !== '4') return bad('Ese número no parece de Venezuela; si es de otro país, escríbelo con + (p. ej. +1…).', raw);
+      }
       const n = d.length - c.code.length;
       const min = Math.min.apply(null, c.len), max = Math.max.apply(null, c.len);
       if (n < min) return bad('Faltan dígitos: un número de ' + c.name + ' lleva ' + c.len.join(' u ') + ' después del +' + c.code + '.', '+' + d);
