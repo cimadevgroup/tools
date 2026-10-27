@@ -325,3 +325,10 @@ test('phoneParts: código fuera de la lista devuelve código sin país', () => {
 test('phoneParts: número local sin 0 usa el país por defecto elegido', () => {
   assert.deepEqual(FR.phoneParts('3001234567', { defaultCountry: 'CO' }), { iso: 'CO', code: '57', national: '3001234567' });
 });
+test('phoneParts: código conocido fuera de la lista elige el más largo (+44 Reino Unido, no +442)', () => {
+  assert.deepEqual(FR.phoneParts('+442071234567'), { iso: '', code: '44', national: '2071234567' });
+  assert.deepEqual(FR.phoneParts('+491701234567'), { iso: '', code: '49', national: '1701234567' });
+});
+test('phoneParts: código totalmente desconocido asume número nacional de 10 dígitos', () => {
+  assert.deepEqual(FR.phoneParts('+9991234567890'), { iso: '', code: '999', national: '1234567890' });
+});

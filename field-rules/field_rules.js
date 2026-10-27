@@ -29,6 +29,13 @@
     { iso: 'IT', code: '39',  name: 'Italia',               len: [9, 10] }
   ];
 
+  // Códigos de país conocidos que NO tienen regla de longitud arriba: solo sirven para separar código y número
+  // en phoneParts (el teléfono se valida con el rango internacional genérico).
+  const EXTRA_CODES = ['7', '20', '27', '30', '31', '32', '33', '36', '40', '41', '43', '44', '45', '46', '47', '48', '49',
+    '55', '60', '61', '62', '63', '64', '65', '66', '81', '82', '84', '86', '90', '91', '92', '93', '94', '95', '98',
+    '212', '213', '216', '351', '353', '354', '358', '372', '380', '501', '502', '503', '504', '505', '506', '591', '595',
+    '598', '961', '962', '966', '971', '972'];
+
   const ok = (value) => ({ ok: true, value, msg: '' });
   const bad = (msg, value) => ({ ok: false, value: value === undefined ? '' : value, msg });
   const str = (v) => (v === null || v === undefined) ? '' : String(v);
@@ -102,7 +109,11 @@
       if (c.iso === 'VE') national = national.replace(/^0+/, '');
       return { iso: c.iso, code: c.code, national };
     }
-    const code = d.slice(0, Math.min(3, Math.max(1, d.length - 8)));
+    // Fuera de la lista de países con validación: el código conocido más largo (EXTRA_CODES); si tampoco
+    // está, se asume un número nacional de 10 dígitos (códigos de 1 a 3 dígitos).
+    let code = '';
+    for (const k of EXTRA_CODES) if (d.startsWith(k) && k.length > code.length) code = k;
+    if (!code) code = d.slice(0, Math.min(3, Math.max(1, d.length - 10)));
     return { iso: '', code, national: d.slice(code.length) };
   }
 
