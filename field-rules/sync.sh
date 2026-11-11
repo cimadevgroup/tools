@@ -5,24 +5,24 @@
 # Navegador → .js tal cual (+ cabecera; phone_input.js es solo navegador). Servidores (Workers) → .mjs: mismo texto + `export default`.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DEV="${FR_DEV:-$(cd "$HERE/../.." && pwd)}"   # FR_DEV: raíz alterna (worktrees) para probar antes de publicar
+DEV="${FR_DEV:-$(cd "$HERE/../../.." && pwd)}"   # FR_DEV: raíz alterna (worktrees) para probar antes de publicar
 MODE="${1:-write}"
 
 # destino | fuente | global
 TARGETS=(
-  "base-desktop/modules/field_rules.js|field_rules|FieldRules"
-  "base-server/worker/field_rules.mjs|field_rules|FieldRules"
-  "cima-desktop/app/ui/field_rules.js|field_rules|FieldRules"
-  "cima-server/field_rules.mjs|field_rules|FieldRules"
-  "cima-landing/app/landing/field_rules.js|field_rules|FieldRules"
-  "cima-ventas-worker/field_rules.mjs|field_rules|FieldRules"
-  "base-desktop/modules/role_fields.js|role_fields|RoleFields"
-  "base-server/worker/role_fields.mjs|role_fields|RoleFields"
-  "cima-desktop/app/ui/role_fields.js|role_fields|RoleFields"
-  "cima-server/role_fields.mjs|role_fields|RoleFields"
-  "cima-desktop/app/ui/phone_input.js|phone_input|PhoneInput"
-  "base-desktop/modules/phone_input.js|phone_input|PhoneInput"
-  "cima-landing/app/landing/phone_input.js|phone_input|PhoneInput"
+  "base/base-desktop/modules/field_rules.js|field_rules|FieldRules"
+  "base/base-server/worker/field_rules.mjs|field_rules|FieldRules"
+  "cima/cima-desktop/app/ui/field_rules.js|field_rules|FieldRules"
+  "cima/cima-server/field_rules.mjs|field_rules|FieldRules"
+  "cima/cima-landing/app/landing/field_rules.js|field_rules|FieldRules"
+  "cima/cima-crm-server/field_rules.mjs|field_rules|FieldRules"
+  "base/base-desktop/modules/role_fields.js|role_fields|RoleFields"
+  "base/base-server/worker/role_fields.mjs|role_fields|RoleFields"
+  "cima/cima-desktop/app/ui/role_fields.js|role_fields|RoleFields"
+  "cima/cima-server/role_fields.mjs|role_fields|RoleFields"
+  "cima/cima-desktop/app/ui/phone_input.js|phone_input|PhoneInput"
+  "base/base-desktop/modules/phone_input.js|phone_input|PhoneInput"
+  "cima/cima-landing/app/landing/phone_input.js|phone_input|PhoneInput"
 )
 
 render() { # fuente global destino → stdout
