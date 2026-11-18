@@ -6,6 +6,8 @@
  *   FieldRules.checkAll({campo:{type,value,opts}}) → { ok, values, errors:{campo:msg} }
  *   FieldRules.phoneParts(v, {defaultCountry}) → { iso, code, national }   (para el selector de país)
  *   FieldRules.COUNTRIES, FieldRules.docDigits(v)
+ *   de2627: opts.country (ISO) en 'phone' y 'doc' → reglas de ese país (CL, CO, AR). Sin country = Venezuela como siempre.
+ *   FieldRules.COUNTRY_DOCS[iso] = códigos de documento del país; FieldRules.DOC_RULES[código] = {pattern, dv?, format}.
  *
  * value = dato normalizado listo para guardar; msg = mensaje en español para mostrar bajo el campo.
  * Vacío = válido (value ''), salvo opts.required.
@@ -58,9 +60,45 @@
     }
     return best;
   }
+  // de2627: modo PAÍS (opts.country = ISO). Solo se activa si llega country: sin él, phone() es exactamente el de siempre.
+  //  · el país da el código por defecto de un número escrito sin «+»;
+  //  · un número que ya trae ese código sin «+» (56912345678 con CL) se toma como explícito;
+  //  · Argentina: quita el 0 y el 15 locales y antepone el 9 de celular (011 15 2345-6789 → +54 9 11 2345 6789).
+  function countryIso(iso) { const t = str(iso).trim().toUpperCase(); return COUNTRIES.find((c) => c.iso === t) || null; }
+  function phoneCountry(raw, c) {
+    let d = raw.replace(/\D/g, '');
+    if (!d) return bad('Un teléfono solo lleva números.', raw);
+    if (raw.startsWith('+') || d.startsWith('00')) return null;              // explícito: sigue el camino de siempre
+    const max = Math.max.apply(null, c.len) + (c.iso === 'AR' ? 1 : 0);
+    if (d.startsWith(c.code) && d.length - c.code.length >= Math.min.apply(null, c.len) && d.length - c.code.length <= max) {
+      d = d.slice(c.code.length);                                            // ya trae el código, sin «+»
+    } else {
+      d = d.replace(/^0+/, '');                                              // 0 de marcación local
+    }
+    if (c.iso === 'AR') {
+      let n = d, mobile = false;
+      if (n.length === 11 && n.charAt(0) === '9') { n = n.slice(1); mobile = true; }
+      if (!mobile && n.length === 12) {
+        for (const a of [2, 3, 4]) { if (n.substr(a, 2) === '15') { n = n.slice(0, a) + n.slice(a + 2); mobile = true; break; } }
+      }
+      if (n.length !== 10) return bad('Un número de Argentina lleva 10 dígitos con el código de área (p. ej. 11 2345 6789); el celular, con 9 delante.', raw);
+      return ok('+54' + (mobile ? '9' : '') + n);
+    }
+    return '+' + c.code + d;                                                 // lo valida el camino de siempre
+  }
   function phone(v, opts) {
     const raw = str(v).trim();
     if (!raw) return ok('');
+    if (opts && opts.country && !/[^\d\s().+-]/.test(raw)) {
+      const c = countryIso(opts.country);
+      if (c && c.iso !== 'VE') {
+        const r = phoneCountry(raw, c);
+        if (r && typeof r === 'object') return r;
+        if (typeof r === 'string') return phone(r, Object.assign({}, opts, { country: null }));
+      } else if (c && c.iso === 'VE') {
+        opts = Object.assign({}, opts, { country: null, defaultCountry: (opts && opts.defaultCountry) || '58' });
+      }
+    }
     if (/[^\d\s().+-]/.test(raw)) return bad('Un teléfono solo lleva números.', raw);
     let d = raw.replace(/\D/g, '');
     if (!d) return bad('Un teléfono solo lleva números.', raw);
@@ -121,9 +159,65 @@
   function docDigits(v) {
     return str(v).replace(/\D/g, '').replace(/^0+/, '');
   }
+  // de2627: documentos por país. Sin opts.country (o con 'VE') doc() es exactamente el de siempre.
+  const COUNTRY_DOCS = { VE: ['V', 'E', 'P', 'J', 'G'], CL: ['RUT', 'P'], CO: ['CC', 'CE', 'NIT', 'P'], AR: ['DNI', 'CUIT', 'P'] };
+  // Lo que el servidor publica en /countries (pattern sobre el valor ya limpio: sin puntos, guiones ni espacios, en mayúsculas).
+  const DOC_RULES = {
+    V: { pattern: '^\\d{1,8}$', format: 'V-12345678' }, E: { pattern: '^\\d{1,9}$', format: 'E-123456789' },
+    J: { pattern: '^\\d{9}$', format: 'J-12345678-9' }, G: { pattern: '^\\d{9}$', format: 'G-12345678-9' },
+    P: { pattern: '^[A-Z0-9]{5,15}$', format: 'AB1234567' },
+    RUT: { pattern: '^\\d{7,8}[0-9K]$', dv: 'mod11', format: '12.345.678-K' },
+    CC: { pattern: '^\\d{6,10}$', format: '1012345678' }, CE: { pattern: '^[A-Z0-9]{6,10}$', format: '1234567' },
+    NIT: { pattern: '^\\d{9,10}$', dv: 'dian', format: '900.123.456-7' },
+    DNI: { pattern: '^\\d{7,8}$', format: '12.345.678' },
+    CUIT: { pattern: '^\\d{11}$', dv: 'mod11', format: '20-12345678-3' }
+  };
+  function rutDv(body) { let s = 0, m = 2; for (let i = body.length - 1; i >= 0; i--) { s += Number(body.charAt(i)) * m; m = m === 7 ? 2 : m + 1; } const r = 11 - (s % 11); return r === 11 ? '0' : (r === 10 ? 'K' : String(r)); }
+  function nitDv(body) { const w = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71]; let s = 0; for (let i = 0; i < body.length; i++) s += Number(body.charAt(body.length - 1 - i)) * w[i]; const r = s % 11; return r > 1 ? String(11 - r) : String(r); }
+  function cuitOk(d) { const w = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]; let s = 0; for (let i = 0; i < 10; i++) s += Number(d.charAt(i)) * w[i]; let r = 11 - (s % 11); if (r === 11) r = 0; return r !== 10 && r === Number(d.charAt(10)); }
+  function docCountry(raw, iso, t) {
+    const list = COUNTRY_DOCS[iso];
+    if (!t) t = list[0];
+    if (list.indexOf(t) < 0) return bad('Tipo de documento desconocido para este país (' + list.join(', ') + ').', raw);
+    const c = raw.toUpperCase().replace(/[\s.\-]/g, '');
+    if (t === 'P') {
+      const p = /^P[\s.-]/i.test(raw) ? c.slice(1) : c;   // «P-AB12345» → AB12345; «PA123456» se queda entero
+      if (!/^[A-Z0-9]+$/.test(p)) return bad('El pasaporte lleva solo letras y números.', raw);
+      if (p.length < 5 || p.length > 15) return bad('El pasaporte lleva entre 5 y 15 letras y números.', raw);
+      return ok('P-' + p);
+    }
+    if (t === 'RUT') {
+      if (!/^\d{7,8}[0-9K]$/.test(c)) return bad('El RUT lleva 7 u 8 números y un dígito verificador (0-9 o K), p. ej. 12.345.678-5.', raw);
+      const body = c.slice(0, -1), dv = c.slice(-1);
+      if (rutDv(body) !== dv) return bad('El dígito verificador del RUT no coincide. Revisa el número.', raw);
+      return ok(body + '-' + dv);
+    }
+    if (t === 'NIT') {
+      if (!/^\d{9,10}$/.test(c)) return bad('El NIT lleva 9 números y, si lo tienes, el dígito verificador (p. ej. 900.123.456-7).', raw);
+      const body = c.slice(0, 9), dv = nitDv(body);
+      if (c.length === 10 && c.charAt(9) !== dv) return bad('El dígito verificador del NIT no coincide. Revisa el número.', raw);
+      return ok(body + '-' + dv);
+    }
+    if (t === 'CUIT') {
+      if (!/^\d{11}$/.test(c)) return bad('El CUIT/CUIL lleva 11 números, p. ej. 20-12345678-3.', raw);
+      if (!cuitOk(c)) return bad('El dígito verificador del CUIT/CUIL no coincide. Revisa el número.', raw);
+      return ok(c);
+    }
+    if (t === 'CE') {
+      if (!/^[A-Z0-9]{6,10}$/.test(c)) return bad('La cédula de extranjería lleva entre 6 y 10 letras y números.', raw);
+      return ok(c);
+    }
+    if (/[^\d]/.test(c)) return bad('El documento lleva solo números.', raw);
+    const d = c.replace(/^0+/, '');
+    if (t === 'CC') { if (d.length < 6 || d.length > 10) return bad('La cédula de ciudadanía lleva entre 6 y 10 números.', raw); return ok(d); }
+    if (t === 'DNI') { if (d.length < 7 || d.length > 8) return bad('El DNI lleva 7 u 8 números.', raw); return ok(d); }
+    return bad('Tipo de documento desconocido.', raw);
+  }
   function doc(v, opts) {
     const raw = str(v).trim();
     if (!raw) return ok('');
+    const iso = (opts && opts.country) ? str(opts.country).trim().toUpperCase() : '';
+    if (iso && iso !== 'VE' && COUNTRY_DOCS[iso]) return docCountry(raw, iso, (opts && opts.docType) ? str(opts.docType).trim().toUpperCase() : '');
     let t = (opts && opts.docType) ? String(opts.docType).toUpperCase() : '';
     let rest = raw.toUpperCase();
     const m = rest.match(/^([VEJGP])(?:[\s.-]+|(?=\d))(.*)$/);
@@ -310,7 +404,7 @@
     return { ok: all, values, errors };
   }
 
-  const FR = { check, checkAll, docDigits, phoneParts, COUNTRIES, TYPES: Object.keys(TYPES) };
+  const FR = { check, checkAll, docDigits, phoneParts, COUNTRIES, COUNTRY_DOCS, DOC_RULES, TYPES: Object.keys(TYPES) };
   if (typeof module === 'object' && module && module.exports) module.exports = FR;
   root.FieldRules = FR;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

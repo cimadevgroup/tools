@@ -332,3 +332,47 @@ test('phoneParts: código conocido fuera de la lista elige el más largo (+44 Re
 test('phoneParts: código totalmente desconocido asume número nacional de 10 dígitos', () => {
   assert.deepEqual(FR.phoneParts('+9991234567890'), { iso: '', code: '999', national: '1234567890' });
 });
+
+// ── de2627: modo país (CL, CO, AR). Sin country todo sigue igual (lo cubren las tablas de arriba). ──
+table('phone', [
+  ['+56 9 1234 5678', { country: 'CL' }, true, '+56912345678'],
+  ['912345678', { country: 'CL' }, true, '+56912345678'],
+  ['56912345678', { country: 'CL' }, true, '+56912345678'],
+  ['3001234567', { country: 'CO' }, true, '+573001234567'],
+  ['573001234567', { country: 'CO' }, true, '+573001234567'],
+  ['011 15 2345 6789', { country: 'AR' }, true, '+5491123456789'],
+  ['0221 15 456 7890', { country: 'AR' }, true, '+5492214567890'],
+  ['11 2345 6789', { country: 'AR' }, true, '+541123456789'],
+  ['5491123456789', { country: 'AR' }, true, '+5491123456789'],
+  ['2214567890', { country: 'AR' }, true, '+542214567890'],
+  ['123', { country: 'AR' }, false],
+  ['+58 414 1234567', { country: 'CL' }, true, '+584141234567'],
+  ['04141234567', { country: 'VE' }, true, '+584141234567'],
+  ['3001234567', undefined, false],
+]);
+table('doc', [
+  ['12.345.678-5', { country: 'CL', docType: 'RUT' }, true, '12345678-5'],
+  ['123456785', { country: 'CL' }, true, '12345678-5'],
+  ['10.000.013-k', { country: 'CL', docType: 'RUT' }, true, '10000013-K'],
+  ['12.345.678-9', { country: 'CL', docType: 'RUT' }, false],
+  ['AB123456', { country: 'CL', docType: 'P' }, true, 'P-AB123456'],
+  ['P-AB123456', { country: 'CO', docType: 'P' }, true, 'P-AB123456'],
+  ['1.012.345.678', { country: 'CO', docType: 'CC' }, true, '1012345678'],
+  ['12345', { country: 'CO', docType: 'CC' }, false],
+  ['900.123.456-8', { country: 'CO', docType: 'NIT' }, true, '900123456-8'],
+  ['900123456', { country: 'CO', docType: 'NIT' }, true, '900123456-8'],
+  ['900.123.456-1', { country: 'CO', docType: 'NIT' }, false],
+  ['E123456', { country: 'CO', docType: 'CE' }, true, 'E123456'],
+  ['12.345.678', { country: 'AR', docType: 'DNI' }, true, '12345678'],
+  ['123456', { country: 'AR', docType: 'DNI' }, false],
+  ['20-12345678-6', { country: 'AR', docType: 'CUIT' }, true, '20123456786'],
+  ['20-12345678-5', { country: 'AR', docType: 'CUIT' }, false],
+  ['12345678', { country: 'AR', docType: 'V' }, false],
+  ['12345678', { country: 'VE', docType: 'V' }, true, 'V-12345678'],
+]);
+test('de2627: COUNTRY_DOCS y DOC_RULES publicados', () => {
+  assert.deepEqual(FR.COUNTRY_DOCS.CL, ['RUT', 'P']);
+  assert.equal(FR.DOC_RULES.RUT.dv, 'mod11');
+  assert.ok(new RegExp(FR.DOC_RULES.RUT.pattern).test('12345678K'));
+  assert.ok(new RegExp(FR.DOC_RULES.V.pattern).test('12345678'));
+});
