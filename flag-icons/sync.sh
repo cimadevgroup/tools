@@ -10,6 +10,7 @@ MODE="${1:-write}"
 # destino (carpeta, relativa a la raíz de dev). Cada repo agrega aquí el suyo.
 TARGETS=(
   "base/base-desktop/vendor/flag-icons"
+  "cima/cima-desktop/app/vendor/flag-icons"
 )
 sumdir() { (cd "$1" 2>/dev/null && find 4x3 LICENSE ORIGEN.md -type f 2>/dev/null | LC_ALL=C sort | xargs md5 -q 2>/dev/null | md5 -q); }
 bad=0
