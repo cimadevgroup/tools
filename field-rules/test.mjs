@@ -345,6 +345,7 @@ table('phone', [
   ['11 2345 6789', { country: 'AR' }, true, '+541123456789'],
   ['5491123456789', { country: 'AR' }, true, '+5491123456789'],
   ['2214567890', { country: 'AR' }, true, '+542214567890'],
+  ['+54 11 15 2345 6789', { country: 'AR' }, true, '+5491123456789'],
   ['123', { country: 'AR' }, false],
   ['+58 414 1234567', { country: 'CL' }, true, '+584141234567'],
   ['04141234567', { country: 'VE' }, true, '+584141234567'],
@@ -362,6 +363,9 @@ table('doc', [
   ['900.123.456-8', { country: 'CO', docType: 'NIT' }, true, '900123456-8'],
   ['900123456', { country: 'CO', docType: 'NIT' }, true, '900123456-8'],
   ['900.123.456-1', { country: 'CO', docType: 'NIT' }, false],
+  ['12345678-9', { country: 'CO', docType: 'NIT' }, false],
+  ['8901234567', { country: 'CO', docType: 'NIT' }, false],
+  ['890.903.938-8', { country: 'CO', docType: 'NIT' }, true, '890903938-8'],
   ['E123456', { country: 'CO', docType: 'CE' }, true, 'E123456'],
   ['12.345.678', { country: 'AR', docType: 'DNI' }, true, '12345678'],
   ['123456', { country: 'AR', docType: 'DNI' }, false],
@@ -372,7 +376,7 @@ table('doc', [
 ]);
 test('de2627: COUNTRY_DOCS y DOC_RULES publicados', () => {
   assert.deepEqual(FR.COUNTRY_DOCS.CL, ['RUT', 'P']);
-  assert.equal(FR.DOC_RULES.RUT.dv, 'mod11');
+  assert.equal(FR.DOC_RULES.RUT.dv, 'rut'); assert.equal(FR.DOC_RULES.CUIT.dv, 'cuit');
   assert.ok(new RegExp(FR.DOC_RULES.RUT.pattern).test('12345678K'));
   assert.ok(new RegExp(FR.DOC_RULES.V.pattern).test('12345678'));
 });

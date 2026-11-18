@@ -7,6 +7,7 @@
  *   FieldRules.phoneParts(v, {defaultCountry}) → { iso, code, national }   (para el selector de país)
  *   FieldRules.COUNTRIES, FieldRules.docDigits(v)
  *   de2627: opts.country (ISO) en 'phone' y 'doc' → reglas de ese país (CL, CO, AR). Sin country = Venezuela como siempre.
+ *   Un país sin reglas propias (fuera de COUNTRY_DOCS para documentos, o fuera de COUNTRIES para teléfonos) usa las de siempre.
  *   FieldRules.COUNTRY_DOCS[iso] = códigos de documento del país; FieldRules.DOC_RULES[código] = {pattern, dv?, format}.
  *
  * value = dato normalizado listo para guardar; msg = mensaje en español para mostrar bajo el campo.
@@ -68,7 +69,13 @@
   function phoneCountry(raw, c) {
     let d = raw.replace(/\D/g, '');
     if (!d) return bad('Un teléfono solo lleva números.', raw);
-    if (raw.startsWith('+') || d.startsWith('00')) return null;              // explícito: sigue el camino de siempre
+    if (raw.startsWith('+') || d.startsWith('00')) {
+      // Explícito: el camino de siempre, salvo un argentino con el 15 local (+54 11 15 2345 6789), que se limpia abajo.
+      if (c.iso !== 'AR') return null;
+      const e = d.startsWith('00') ? d.slice(2) : d;
+      if (!(e.startsWith('54') && e.length === 14 && [2, 3, 4].some((a) => e.substr(2 + a, 2) === '15'))) return null;
+      d = e;
+    }
     const max = Math.max.apply(null, c.len) + (c.iso === 'AR' ? 1 : 0);
     if (d.startsWith(c.code) && d.length - c.code.length >= Math.min.apply(null, c.len) && d.length - c.code.length <= max) {
       d = d.slice(c.code.length);                                            // ya trae el código, sin «+»
@@ -166,11 +173,11 @@
     V: { pattern: '^\\d{1,8}$', format: 'V-12345678' }, E: { pattern: '^\\d{1,9}$', format: 'E-123456789' },
     J: { pattern: '^\\d{9}$', format: 'J-12345678-9' }, G: { pattern: '^\\d{9}$', format: 'G-12345678-9' },
     P: { pattern: '^[A-Z0-9]{5,15}$', format: 'AB1234567' },
-    RUT: { pattern: '^\\d{7,8}[0-9K]$', dv: 'mod11', format: '12.345.678-K' },
+    RUT: { pattern: '^\\d{7,8}[0-9K]$', dv: 'rut', format: '12.345.678-K' },
     CC: { pattern: '^\\d{6,10}$', format: '1012345678' }, CE: { pattern: '^[A-Z0-9]{6,10}$', format: '1234567' },
-    NIT: { pattern: '^\\d{9,10}$', dv: 'dian', format: '900.123.456-7' },
+    NIT: { pattern: '^\\d{7,11}$', dv: 'dian', format: '900.123.456-8' },
     DNI: { pattern: '^\\d{7,8}$', format: '12.345.678' },
-    CUIT: { pattern: '^\\d{11}$', dv: 'mod11', format: '20-12345678-3' }
+    CUIT: { pattern: '^\\d{11}$', dv: 'cuit', format: '20-12345678-3' }
   };
   function rutDv(body) { let s = 0, m = 2; for (let i = body.length - 1; i >= 0; i--) { s += Number(body.charAt(i)) * m; m = m === 7 ? 2 : m + 1; } const r = 11 - (s % 11); return r === 11 ? '0' : (r === 10 ? 'K' : String(r)); }
   function nitDv(body) { const w = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71]; let s = 0; for (let i = 0; i < body.length; i++) s += Number(body.charAt(body.length - 1 - i)) * w[i]; const r = s % 11; return r > 1 ? String(11 - r) : String(r); }
@@ -193,9 +200,15 @@
       return ok(body + '-' + dv);
     }
     if (t === 'NIT') {
-      if (!/^\d{9,10}$/.test(c)) return bad('El NIT lleva 9 números y, si lo tienes, el dígito verificador (p. ej. 900.123.456-7).', raw);
-      const body = c.slice(0, 9), dv = nitDv(body);
-      if (c.length === 10 && c.charAt(9) !== dv) return bad('El dígito verificador del NIT no coincide. Revisa el número.', raw);
+      // Con guion, el guion separa cuerpo y DV (900.123.456-8, 12345678-9); sin guion, 9 dígitos son el cuerpo y 10 = cuerpo + DV.
+      const m = raw.toUpperCase().replace(/[\s.]/g, '').match(/^(\d{6,10})-(\d)$/);
+      let body, given = null;
+      if (m) { body = m[1]; given = m[2]; }
+      else if (/^\d{6,9}$/.test(c)) body = c;
+      else if (/^\d{10}$/.test(c)) { body = c.slice(0, 9); given = c.charAt(9); }
+      else return bad('El NIT lleva de 6 a 10 números y el dígito verificador (p. ej. 900.123.456-8).', raw);
+      const dv = nitDv(body);
+      if (given !== null && given !== dv) return bad('El dígito verificador del NIT no coincide. Revisa el número.', raw);
       return ok(body + '-' + dv);
     }
     if (t === 'CUIT') {
