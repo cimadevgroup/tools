@@ -380,3 +380,81 @@ test('de2627: COUNTRY_DOCS y DOC_RULES publicados', () => {
   assert.ok(new RegExp(FR.DOC_RULES.RUT.pattern).test('12345678K'));
   assert.ok(new RegExp(FR.DOC_RULES.V.pattern).test('12345678'));
 });
+
+// ══ F0 · catálogo de campos (catalog.json, CATALOGO.md, FieldFormat, phoneCanon) ══
+import { readFileSync } from 'node:fs';
+const FF = require('./field_format.js');
+const CAT = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.url), 'utf8'));
+
+// Los ejemplos del catálogo SON la documentación: CATALOGO.md se genera de ellos.
+for (const t of CAT.tipos) {
+  for (const e of (t.ejemplos || [])) {
+    test(`catálogo ${t.id}: ${e.fn} ${JSON.stringify(e.in)}`, () => {
+      if (e.fn === 'check') {
+        const r = FR.check(e.type, e.in, e.opts);
+        if (e.error) { assert.equal(r.ok, false); assert.ok(r.msg.length > 3); }
+        else { assert.equal(r.ok, true, r.msg); assert.deepEqual(r.value, e.out); }
+      } else if (e.fn === 'show') assert.equal(FF.show(e.id, e.in, e.opts), e.out);
+      else if (e.fn === 'phoneCanon') assert.equal(FR.phoneCanon(e.in, e.home), e.out);
+      else if (e.fn === 'normDocType') assert.equal(FR.normDocType(e.in, e.iso), e.out);
+      else assert.equal(FF[e.fn](e.in, e.opts), e.out);
+    });
+  }
+}
+test('catálogo: todo tipo implementado tiene ejemplos y todo catalogado tiene fase', () => {
+  for (const t of CAT.tipos) {
+    assert.ok(['implementado', 'catalogado'].includes(t.estado), t.id);
+    if (t.estado === 'implementado') assert.ok((t.ejemplos || []).length > 0, t.id + ' sin ejemplos');
+    else assert.ok(t.fase, t.id + ' sin fase');
+  }
+});
+test('CATALOGO.md coincide con catalog.json', async () => {
+  const { render } = await import('./gen-catalogo.mjs');
+  assert.equal(readFileSync(new URL('./CATALOGO.md', import.meta.url), 'utf8'), render());
+});
+
+// phoneCanon = el _phoneCanon de core (de2818, cima-server index.js) movido a FieldRules: mismo resultado sobre un corpus.
+const _HOMES = { VE: { dial: '58', trunk: '0', nsn_min: 10, nsn_max: 10 }, CO: { dial: '57', trunk: '', nsn_min: 10, nsn_max: 10 }, CL: { dial: '56', trunk: '', nsn_min: 9, nsn_max: 9 }, AR: { dial: '54', trunk: '0', nsn_min: 10, nsn_max: 11 } };
+const _FALLBACK = Object.entries(_HOMES).map(([code, v]) => ({ code, ...v }));
+function coreRef(raw, home) {   // copia literal de _phoneCanon de core, con COUNTRY_FALLBACK reducido a lo que usa
+  let s = String(raw == null ? '' : raw).trim().replace(/[\s().-]/g, '');
+  if (s.startsWith('00')) s = '+' + s.slice(2);
+  if (!/^\+?\d+$/.test(s)) return null;
+  let d = s.replace(/\D/g, '');
+  if (s.startsWith('+')) {
+    let best = null;
+    for (const c of _FALLBACK) { const dl = String(c.dial || ''); if (dl && dl !== '1' && d.startsWith(dl) && (!best || dl.length > String(best.dial).length)) best = c; }
+    if (best && best.trunk) { const rest = d.slice(String(best.dial).length); if (rest.startsWith(best.trunk)) d = String(best.dial) + rest.slice(best.trunk.length); }
+  } else if (home) {
+    const dl = String(home.dial || ''), tr = String(home.trunk || '');
+    if (dl && tr && d.startsWith(dl + tr)) d = dl + d.slice(dl.length + tr.length);
+    else if (tr && d.startsWith(tr)) { d = d.slice(tr.length); if (d.length < (home.nsn_min || 10) || d.length > (home.nsn_max || 10)) return null; d = dl + d; }
+    else if (d.length >= (home.nsn_min || 10) && d.length <= (home.nsn_max || 10)) d = dl + d;
+    else if (dl && d.startsWith(dl) && d.length >= dl.length + (home.nsn_min || 10)) { /* ya trae el código */ }
+    else return null;
+  } else return null;
+  return d.length >= 7 && d.length <= 15 ? '+' + d : null;
+}
+test('phoneCanon: paridad con el _phoneCanon de core sobre un corpus', () => {
+  const entradas = ['0414-1234567', '+58 0414 123 4567', '414 1234567', '584141234567', '58 0414 1234567', '0058 414 1234567', '+584141234567', '04141234567', '4141234567', '12345', '', 'abc', '+1 305 123 4567', '3051234567',
+    '+57 300 1234567', '300 1234567', '9 1234 5678', '+56 9 1234 5678', '011 2345 6789', '+54 9 11 2345 6789', '0414.123.4567', '(0414) 123-4567', '+573001234567', '+0414123', '++58414', '00 1 305 1234567', '1234567890123456'];
+  for (const e of entradas) for (const iso of [null, 'VE', 'CO', 'CL', 'AR']) {
+    const home = iso ? _HOMES[iso] : null;
+    assert.equal(FR.phoneCanon(e, home ? { ...home } : null), coreRef(e, home), JSON.stringify([e, iso]));
+    if (iso) assert.equal(FR.phoneCanon(e, iso), coreRef(e, home), 'ISO ' + JSON.stringify([e, iso]));
+  }
+});
+test('EMAIL_RE es la regex única y la usa check(email)', () => {
+  assert.ok(FR.EMAIL_RE.test('a@b.co')); assert.ok(!FR.EMAIL_RE.test('a@b.c')); assert.ok(!FR.EMAIL_RE.test('a b@x.com'));
+});
+test('FieldFormat: mostrar lo desconocido no lanza ni inventa', () => {
+  assert.equal(FF.show('date', 'ayer'), 'ayer'); assert.equal(FF.show('phone', '0414'), '0414'); assert.equal(FF.show('inventado', 7), '7');
+  assert.equal(FF.money(null), ''); assert.equal(FF.hours([]), ''); assert.equal(FF.instant('x'), 'x');
+});
+test('FieldFormat: el mes siempre sale en letras (nunca 05/11)', () => {
+  for (let m = 1; m <= 12; m++) assert.match(FF.date('2026-' + String(m).padStart(2, '0') + '-05'), /^5 [a-z]{3} 2026$/);
+});
+test('documento SIN ceros a la izquierda en V ni E (decisión de Miguel, 20 nov 2026)', () => {
+  for (const [i, o] of [['V-0005142891'.replace('0005142891', '05142891'), 'V-5142891'], ['E-000123456', 'E-123456'], ['v.00001', 'V-1']]) assert.equal(FR.check('doc', i).value, o);
+  assert.equal(FR.check('doc', '0000', { docType: 'V' }).ok, false);
+});

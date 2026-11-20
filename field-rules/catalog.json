@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "titulo": "Catálogo de tipos de campo de CIMA",
+  "reglas_generales": [
+    "Guardado = FieldRules.check(id, v, opts).value. Mostrado = FieldFormat.show(id, v, opts). Un dato que no valida se conserva y se cuenta, salvo que el interruptor estricto del campo esté en 1 (plan F2/F7).",
+    "Nunca se muestra una fecha como 05/11: el mes va en letras («5 nov 2026»).",
+    "Vacío siempre es válido (value ''), salvo opts.required.",
+    "Un tipo nuevo se agrega PRIMERO a este catálogo, con ejemplos; luego al código; luego se corre sync.sh."
+  ],
+  "estados": {
+    "implementado": "Existe en FieldRules/FieldFormat y sus ejemplos corren en test.mjs.",
+    "catalogado": "Regla decidida, pero aún no hay código en FieldRules; la fase indicada lo implementa. No lo reinventes en una pantalla."
+  },
+  "tipos": [
+    { "id": "doc_type", "grupo": "Identidad", "estado": "implementado", "titulo": "Tipo de documento",
+      "guardado": "Código por país: VE V E J G P · CL RUT P · CO CC CE NIT P · AR DNI CUIT P. «Cedula» pasa a V, «Pasaporte» a P, «Otro» a vacío (FieldRules.normDocType).",
+      "mostrado": "El código (V) o «V — Venezolano» donde haya espacio. La lista sale del país del consultorio (FieldRules.COUNTRY_DOCS).",
+      "regla": "Solo códigos de COUNTRY_DOCS del país del consultorio.",
+      "ejemplos": [
+        { "fn": "normDocType", "in": "Cedula", "out": "V" },
+        { "fn": "normDocType", "in": "Otro", "out": "" },
+        { "fn": "normDocType", "in": "Cedula", "iso": "CO", "out": "CC" }
+      ] },
+    { "id": "doc_number", "grupo": "Identidad", "estado": "implementado", "titulo": "Número de documento",
+      "guardado": "Con prefijo y SIN ceros a la izquierda en V ni E: V-5142891, E-123456789, J-12345678-9, P-AB123456. RUT 12345678-5, NIT 900123456-8, CUIT 11 dígitos, CC y DNI solo dígitos.",
+      "mostrado": "V/E/J/G/P tal cual se guardan; RUT 12.345.678-5; NIT 900.123.456-8; CUIT 20-12345678-3; DNI 12.345.678; CC 1.012.345.678.",
+      "regla": "DOC_RULES[tipo] más dígito verificador (RUT módulo 11, NIT DIAN, CUIT). V hasta 8 dígitos, E hasta 9. P no acepta un valor de cédula.",
+      "ejemplos": [
+        { "fn": "check", "type": "doc", "in": "V-05142891", "out": "V-5142891" },
+        { "fn": "check", "type": "doc", "in": "v 5.142.891", "out": "V-5142891" },
+        { "fn": "check", "type": "doc", "in": "005142891", "opts": { "docType": "V" }, "out": "V-5142891" },
+        { "fn": "check", "type": "doc", "in": "E-000123456789", "out": "E-123456789" },
+        { "fn": "check", "type": "doc", "in": "j-12345678-9", "out": "J-12345678-9" },
+        { "fn": "check", "type": "doc", "in": "pab123456", "opts": { "docType": "P" }, "out": "P-PAB123456" },
+        { "fn": "check", "type": "doc", "in": "12.345.678-5", "opts": { "country": "CL", "docType": "RUT" }, "out": "12345678-5" },
+        { "fn": "check", "type": "doc", "in": "12.345.678-9", "opts": { "country": "CL", "docType": "RUT" }, "error": true },
+        { "fn": "show", "id": "doc_number", "in": "V-5142891", "out": "V-5142891" },
+        { "fn": "show", "id": "doc_number", "in": "12345678-5", "out": "12.345.678-5" }
+      ] },
+    { "id": "doc_key", "grupo": "Identidad", "estado": "catalogado", "fase": "F2 (core)", "titulo": "Clave de búsqueda del documento",
+      "guardado": "Índice interno (_mpiNormDoc de core): sin prefijo, sin ceros y sin signos; el pasaporte va aparte. No se captura nunca.",
+      "mostrado": "No se muestra.", "regla": "Solo core la calcula; las pantallas no." },
+    { "id": "med_license", "grupo": "Identidad", "estado": "catalogado", "fase": "F2/F3", "titulo": "Registro profesional (matrícula)",
+      "guardado": "Mayúsculas con la sigla del ente: MPPS-12345. VE MPPS o colegio; CO RETHUS; el resto texto de hasta 20.",
+      "mostrado": "Tal cual.", "regla": "Sigla por país según la tabla de países del servidor (prof_reg_short)." },
+    { "id": "tax_id", "grupo": "Identidad", "estado": "implementado", "titulo": "Identificación fiscal del consultorio",
+      "guardado": "Es un doc_number de tipo J, G, NIT, CUIT o RUT.", "mostrado": "Como doc_number.", "regla": "Igual que doc_number.",
+      "ejemplos": [ { "fn": "check", "type": "doc", "in": "g-20000001-0", "out": "G-20000001-0" } ] },
+
+    { "id": "phone", "grupo": "Contacto", "estado": "implementado", "titulo": "Teléfono (phone, phone2, emerg_phone, whatsapp)",
+      "guardado": "E.164 sin el 0 nacional: +584141234567. Sin «+» se usa el país del consultorio. +1 no se adivina (EE. UU. o R. Dominicana). El índice de búsqueda guarda también las formas nacionales.",
+      "mostrado": "Agrupado: +58 414 123 4567. Los enlaces tel: y wa.me se arman SIEMPRE desde el guardado (FieldFormat.tel / wa).",
+      "regla": "8 a 15 dígitos; largo nacional según el país (FieldRules.COUNTRIES). check valida con mensaje; phoneCanon normaliza tolerante lo que llega sucio (motor de core, de2818).",
+      "ejemplos": [
+        { "fn": "check", "type": "phone", "in": "0414-1234567", "out": "+584141234567" },
+        { "fn": "check", "type": "phone", "in": "+58 0414 123 4567", "out": "+584141234567" },
+        { "fn": "check", "type": "phone", "in": "414 1234567", "out": "+584141234567" },
+        { "fn": "check", "type": "phone", "in": "300 1234567", "opts": { "country": "CO" }, "out": "+573001234567" },
+        { "fn": "phoneCanon", "in": "0414-1234567", "home": "VE", "out": "+584141234567" },
+        { "fn": "phoneCanon", "in": "0058 414 1234567", "home": "VE", "out": "+584141234567" },
+        { "fn": "phoneCanon", "in": "414 1234567", "out": null },
+        { "fn": "show", "id": "phone", "in": "+584141234567", "out": "+58 414 123 4567" },
+        { "fn": "show", "id": "phone", "in": "+56912345678", "out": "+56 9 1234 5678" },
+        { "fn": "show", "id": "phone", "in": "+5491123456789", "out": "+54 9 11 2345 6789" },
+        { "fn": "tel", "in": "+584141234567", "out": "tel:+584141234567" },
+        { "fn": "wa", "in": "+584141234567", "out": "https://wa.me/584141234567" }
+      ] },
+    { "id": "email", "grupo": "Contacto", "estado": "implementado", "titulo": "Correo",
+      "guardado": "Sin espacios alrededor, en minúsculas, hasta 120 caracteres.", "mostrado": "Tal cual.",
+      "regla": "UNA sola regex: FieldRules.EMAIL_RE. Nadie escribe otra.",
+      "ejemplos": [
+        { "fn": "check", "type": "email", "in": "  Ana.Perez@Correo.COM ", "out": "ana.perez@correo.com" },
+        { "fn": "check", "type": "email", "in": "ana@correo", "error": true }
+      ] },
+    { "id": "address", "grupo": "Contacto", "estado": "implementado", "titulo": "Dirección",
+      "guardado": "Objeto {line1, line2, city, state, postal, country ISO}. País obligatorio. Código postal según el país.",
+      "mostrado": "Una línea: «Av. Principal 12, Piso 3, Caracas, Miranda 1060, Venezuela».",
+      "regla": "country es ISO alfa-2 (tipo country); las demás partes son texto.",
+      "ejemplos": [
+        { "fn": "show", "id": "address", "in": { "line1": "Av. Principal 12", "line2": "Piso 3", "city": "Caracas", "state": "Miranda", "postal": "1060", "country": "VE" }, "out": "Av. Principal 12, Piso 3, Caracas, Miranda 1060, Venezuela" }
+      ] },
+
+    { "id": "name", "grupo": "Persona", "estado": "implementado", "titulo": "Nombre y apellido (campos aparte)",
+      "guardado": "Sin espacios sobrantes; se capitaliza solo si llega todo en mayúsculas o todo en minúsculas. De 1 a 60 caracteres, sin dígitos.",
+      "mostrado": "Tal cual.", "regla": "Letras, espacios, apóstrofo y guion.",
+      "ejemplos": [
+        { "fn": "check", "type": "name", "in": "  María   José ", "out": "María José" },
+        { "fn": "check", "type": "name", "in": "Ana2", "error": true }
+      ] },
+    { "id": "sex", "grupo": "Persona", "estado": "implementado", "titulo": "Sexo",
+      "guardado": "F, M o vacío. Acepta «Masculino», «Hombre», «femenino»… (FieldRules.normSex, absorbido de CimaFieldCatalog). NUNCA se deduce del título Dr./Dra.",
+      "mostrado": "Femenino / Masculino / Prefiero no decir.", "regla": "Cualquier otro valor se rechaza.",
+      "ejemplos": [
+        { "fn": "check", "type": "sex", "in": "Masculino", "out": "M" },
+        { "fn": "check", "type": "sex", "in": "mujer", "out": "F" },
+        { "fn": "check", "type": "sex", "in": "Prefiero no decir", "out": "" },
+        { "fn": "check", "type": "sex", "in": "x", "error": true },
+        { "fn": "show", "id": "sex", "in": "F", "out": "Femenino" },
+        { "fn": "show", "id": "sex", "in": "", "out": "Prefiero no decir" }
+      ] },
+    { "id": "birthdate", "grupo": "Persona", "estado": "implementado", "titulo": "Fecha de nacimiento",
+      "guardado": "AAAA-MM-DD. No futura; hasta 120 años (personal del consultorio, de 15 a 100).",
+      "mostrado": "«10 nov 1990 (36 años)». La edad se calcula con la fecha del día, no con el año.",
+      "regla": "opts.birth (tipo birth).",
+      "ejemplos": [
+        { "fn": "check", "type": "birth", "in": "1990-11-10", "opts": { "today": "2026-11-20" }, "out": "1990-11-10" },
+        { "fn": "check", "type": "birth", "in": "2999-01-01", "opts": { "today": "2026-11-20" }, "error": true },
+        { "fn": "show", "id": "birthdate", "in": "1990-11-10", "opts": { "today": "2026-11-20" }, "out": "10 nov 1990 (36 años)" },
+        { "fn": "show", "id": "birthdate", "in": "1990-11-21", "opts": { "today": "2026-11-20" }, "out": "21 nov 1990 (35 años)" }
+      ] },
+    { "id": "title", "grupo": "Persona", "estado": "catalogado", "fase": "F3", "titulo": "Título y estado civil",
+      "guardado": "title: código DR DRA LIC ING… · marital_status: S C D V U.", "mostrado": "Dr., Dra., Lic., Ing.", "regla": "Lista cerrada." },
+
+    { "id": "country", "grupo": "Geografía y tiempo", "estado": "implementado", "titulo": "País",
+      "guardado": "ISO 3166-1 alfa-2 en mayúsculas, NUNCA texto libre. Un nombre conocido («Venezuela») se traduce al código.",
+      "mostrado": "El nombre del país en español (FieldFormat.countryName).", "regla": "2 letras o un nombre de FieldRules.COUNTRIES.",
+      "ejemplos": [
+        { "fn": "check", "type": "country", "in": "ve", "out": "VE" },
+        { "fn": "check", "type": "country", "in": "Venezuela", "out": "VE" },
+        { "fn": "check", "type": "country", "in": "Narnia", "error": true },
+        { "fn": "show", "id": "country", "in": "CO", "out": "Colombia" }
+      ] },
+    { "id": "state", "grupo": "Geografía y tiempo", "estado": "catalogado", "fase": "F3", "titulo": "Estado o provincia",
+      "guardado": "ISO 3166-2 si hay catálogo del país; si no, texto de hasta 60.", "mostrado": "El nombre.", "regla": "city: texto de hasta 60." },
+    { "id": "timezone", "grupo": "Geografía y tiempo", "estado": "catalogado", "fase": "F2", "titulo": "Zona horaria",
+      "guardado": "IANA (America/Caracas); la válida de cada país sale de la tabla country del servidor.", "mostrado": "Nombre de la ciudad.", "regla": "countryTzOk de core." },
+    { "id": "date", "grupo": "Geografía y tiempo", "estado": "implementado", "titulo": "Fecha",
+      "guardado": "AAAA-MM-DD, fecha real del calendario.", "mostrado": "«10 nov 2026». Nunca 10/11/2026.", "regla": "Se rechazan 2026-02-30 y similares.",
+      "ejemplos": [
+        { "fn": "check", "type": "date", "in": "2026-11-10", "out": "2026-11-10" },
+        { "fn": "check", "type": "date", "in": "2026-02-30", "error": true },
+        { "fn": "show", "id": "date", "in": "2026-11-05", "out": "5 nov 2026" }
+      ] },
+    { "id": "instant", "grupo": "Geografía y tiempo", "estado": "implementado", "titulo": "Instante",
+      "guardado": "ISO UTC con Z (o epoch ms: UNA sola forma por tabla).", "mostrado": "En la zona del consultorio: «10 nov 2026, 15:45».", "regla": "opts.timezone IANA; sin zona se muestra en UTC.",
+      "ejemplos": [
+        { "fn": "show", "id": "instant", "in": "2026-11-10T19:45:00Z", "opts": { "timezone": "America/Caracas" }, "out": "10 nov 2026, 15:45" },
+        { "fn": "show", "id": "instant", "in": "2026-11-10T02:30:00Z", "opts": { "timezone": "America/Caracas" }, "out": "9 nov 2026, 22:30" }
+      ] },
+    { "id": "appointment", "grupo": "Geografía y tiempo", "estado": "catalogado", "fase": "F2", "titulo": "Cita, duración y horario",
+      "guardado": "appointment: fecha y hora local más la zona del consultorio. duration: minutos. opening_hours: [{dow, open, close}] en 24 h (dow 1=lunes … 7=domingo) más la zona.",
+      "mostrado": "El horario se agrupa: «Lun a vie 08:00–17:00; sáb 09:00–12:00».", "regla": "open < close; horas HH:MM.",
+      "ejemplos": [
+        { "fn": "show", "id": "opening_hours", "in": [ { "dow": 1, "open": "08:00", "close": "17:00" }, { "dow": 2, "open": "08:00", "close": "17:00" }, { "dow": 3, "open": "08:00", "close": "17:00" }, { "dow": 4, "open": "08:00", "close": "17:00" }, { "dow": 5, "open": "08:00", "close": "17:00" }, { "dow": 6, "open": "09:00", "close": "12:00" } ], "out": "Lun a vie 08:00–17:00; sáb 09:00–12:00" }
+      ] },
+
+    { "id": "clinicos", "grupo": "Clínicos", "estado": "catalogado", "fase": "F3", "titulo": "Datos clínicos (un valor raro avisa, no bloquea)",
+      "guardado": "blood_type (catálogo A+ A- B+ B- AB+ AB- O+ O-); weight kg con 1 decimal (0,3 a 400); height cm (30 a 250); bp_sys / bp_dia; heart_rate; spo2; temp °C; glucose mg/dL; bmi calculado; icd con icd_system.",
+      "mostrado": "Con su unidad: «72,5 kg», «170 cm».", "regla": "Fuera de rango = aviso, no error." },
+
+    { "id": "money", "grupo": "Dinero", "estado": "implementado", "titulo": "Dinero",
+      "guardado": "amount_minor (entero, céntimos) más currency ISO 4217. fx_rate: texto decimal con rate_date y rate_source. Antes de migrar, verificar cómo guarda core hoy: nada se migra a ciegas.",
+      "mostrado": "«1.234,50 USD» (punto de miles, coma decimal; CLP, JPY, PYG, KRW y VND sin decimales).", "regla": "Nunca float.",
+      "ejemplos": [
+        { "fn": "show", "id": "money", "in": { "amount_minor": 123450, "currency": "USD" }, "out": "1.234,50 USD" },
+        { "fn": "show", "id": "money", "in": { "amount_minor": 5, "currency": "USD" }, "out": "0,05 USD" },
+        { "fn": "show", "id": "money", "in": { "amount_minor": 1500000, "currency": "CLP" }, "out": "1.500.000 CLP" },
+        { "fn": "show", "id": "money", "in": { "amount_minor": -2550, "currency": "EUR" }, "out": "-25,50 EUR" }
+      ] },
+
+    { "id": "url", "grupo": "URLs, redes y hosting", "estado": "implementado", "titulo": "Enlace",
+      "guardado": "Solo http(s); sin protocolo se antepone https://. Meta: solo https y sin utm_* (F8).", "mostrado": "Tal cual.", "regla": "Sin espacios; host con punto.",
+      "ejemplos": [
+        { "fn": "check", "type": "url", "in": "ejemplo.com/cita", "out": "https://ejemplo.com/cita" },
+        { "fn": "check", "type": "url", "in": "javascript:alert(1)", "error": true }
+      ] },
+    { "id": "instagram", "grupo": "URLs, redes y hosting", "estado": "implementado", "titulo": "Instagram (y tiktok, x, facebook en F8)",
+      "guardado": "Usuario sin @, en minúsculas; acepta la URL pegada.", "mostrado": "@usuario.", "regla": "Letras, números, punto y guion bajo, hasta 30.",
+      "ejemplos": [
+        { "fn": "check", "type": "instagram", "in": "https://www.instagram.com/Dra.Perez/?hl=es", "out": "dra.perez" },
+        { "fn": "check", "type": "instagram", "in": "@dra.perez", "out": "dra.perez" }
+      ] },
+    { "id": "slug", "grupo": "URLs, redes y hosting", "estado": "catalogado", "fase": "F8", "titulo": "Slug, dominio propio y coordenadas",
+      "guardado": "slug [a-z0-9-]{3,40} con lista de reservados; custom_domain en punycode; geo con 6 decimales.", "mostrado": "Tal cual.",
+      "regla": "Todo formulario publicado se declara con tipos de este catálogo y se valida en el Worker de páginas y otra vez en core; el constructor solo ofrece estos tipos." },
+
+    { "id": "text", "grupo": "Genéricos", "estado": "implementado", "titulo": "Texto, número, usuario y contraseña",
+      "guardado": "text: sin espacios sobrantes y con largo máximo. number: punto al guardar. username: minúsculas, 3 a 32, [a-z0-9._-]. password: nunca en claro.",
+      "mostrado": "number: coma al mostrar con punto de miles («1.234,5»).", "regla": "Política de usuario y contraseña de core.",
+      "ejemplos": [
+        { "fn": "check", "type": "number", "in": "1.234,5", "out": 1234.5 },
+        { "fn": "show", "id": "number", "in": 1234.5, "out": "1.234,5" },
+        { "fn": "check", "type": "username", "in": " Dra.Perez ", "out": "dra.perez" }
+      ] }
+  ],
+  "paises": {
+    "nota": "Documentos por país: FieldRules.COUNTRY_DOCS. Etiquetas largas en español para listas con espacio.",
+    "doc_etiquetas": {
+      "V": "Venezolano", "E": "Extranjero", "P": "Pasaporte", "J": "Jurídico", "G": "Gubernamental",
+      "RUT": "RUT", "CC": "Cédula de ciudadanía", "CE": "Cédula de extranjería", "NIT": "NIT", "DNI": "DNI", "CUIT": "CUIT/CUIL"
+    }
+  },
+  "lint": {
+    "nota": "Lo que lee lint-campos.mjs: un input con alguno de estos ids/nombres debe llevar data-cima-field; los de tipo tel, email y date también.",
+    "tipos_input": ["tel", "email", "date"],
+    "ids": ["doc", "cedula", "phone", "tel", "whats", "email", "correo", "birth", "nacim", "sex", "country", "pais", "monto", "price"],
+    "excepciones": "campos-excepciones.txt (una línea por excepción: ruta:línea motivo)"
+  }
+}

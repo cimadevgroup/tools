@@ -10,6 +10,9 @@
  *   Un país sin reglas propias (fuera de COUNTRY_DOCS para documentos, o fuera de COUNTRIES para teléfonos) usa las de siempre.
  *   FieldRules.COUNTRY_DOCS[iso] = códigos de documento del país; FieldRules.DOC_RULES[código] = {pattern, dv?, format}.
  *
+ *   F0 (catálogo): FieldRules.phoneCanon(raw, home) (motor de core, tolerante), EMAIL_RE (única regex de correo), tipos 'sex' y 'country',
+ *   normSex, normDocType. El catálogo completo (reglas, ejemplos) está en CATALOGO.md; la presentación en FieldFormat (field_format.js).
+ *
  * value = dato normalizado listo para guardar; msg = mensaje en español para mostrar bajo el campo.
  * Vacío = válido (value ''), salvo opts.required.
  */
@@ -44,12 +47,15 @@
   const str = (v) => (v === null || v === undefined) ? '' : String(v);
 
   // ── correo ───────────────────────────────────────────────────────────────
+  // UNA sola regex para todo el ecosistema (core, escritorio, móvil, portal, páginas). Quien necesite probar un correo usa
+  // FieldRules.EMAIL_RE o FieldRules.check('email', …); nadie escribe otra.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/;
   function email(v) {
     const s = str(v).trim().toLowerCase();
     if (!s) return ok('');
     if (/\s/.test(s)) return bad('El correo no lleva espacios.', s);
     if (s.length > 120) return bad('El correo es demasiado largo (máximo 120 caracteres).', s);
-    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(s)) return bad('Escribe un correo válido, como nombre@dominio.com.', s);
+    if (!EMAIL_RE.test(s)) return bad('Escribe un correo válido, como nombre@dominio.com.', s);
     return ok(s);
   }
 
@@ -391,8 +397,79 @@
     return ok(s);
   }
 
+  // ── teléfono canónico tolerante (motor de core, de2818) ───────────────────
+  // Distinto de phone(): phone() VALIDA con el largo de cada país y devuelve mensajes; phoneCanon() solo NORMALIZA lo que ya
+  // está guardado o llega sucio (importaciones, páginas públicas) y devuelve '+{código}{número}' o null (7 a 15 dígitos).
+  // `home` = país del consultorio: ISO («VE») o fila {dial, trunk, nsn_min, nsn_max}; lo usan los números escritos sin «+».
+  // Es EL motor de core (_phoneCanon) movido aquí: misma lógica, misma tabla de países con prefijo de marcación local.
+  const PHONE_HOMES = [
+    { code: 'VE', dial: '58', trunk: '0', nsn_min: 10, nsn_max: 10 },
+    { code: 'CO', dial: '57', trunk: '',  nsn_min: 10, nsn_max: 10 },
+    { code: 'CL', dial: '56', trunk: '',  nsn_min: 9,  nsn_max: 9 },
+    { code: 'AR', dial: '54', trunk: '0', nsn_min: 10, nsn_max: 11 }
+  ];
+  function phoneCanon(raw, home) {
+    if (typeof home === 'string') { const iso = home.trim().toUpperCase(); home = PHONE_HOMES.find((c) => c.code === iso) || null; }
+    let s = str(raw).trim().replace(/[\s().-]/g, '');
+    if (s.startsWith('00')) s = '+' + s.slice(2);
+    if (!/^\+?\d+$/.test(s)) return null;
+    let d = s.replace(/\D/g, '');
+    if (s.startsWith('+')) {
+      let best = null;
+      for (const c of PHONE_HOMES) { const dl = c.dial; if (dl && dl !== '1' && d.startsWith(dl) && (!best || dl.length > best.dial.length)) best = c; }
+      if (best && best.trunk) { const rest = d.slice(best.dial.length); if (rest.startsWith(best.trunk)) d = best.dial + rest.slice(best.trunk.length); }
+    } else if (home) {
+      const dl = String(home.dial || ''), tr = String(home.trunk || '');
+      if (dl && tr && d.startsWith(dl + tr)) d = dl + d.slice(dl.length + tr.length);   // «58 0414…» sin «+»
+      else if (tr && d.startsWith(tr)) { d = d.slice(tr.length); if (d.length < (home.nsn_min || 10) || d.length > (home.nsn_max || 10)) return null; d = dl + d; }
+      else if (d.length >= (home.nsn_min || 10) && d.length <= (home.nsn_max || 10)) d = dl + d;
+      else if (dl && d.startsWith(dl) && d.length >= dl.length + (home.nsn_min || 10)) { /* ya trae el código de país sin «+» */ }
+      else return null;
+    } else return null;
+    return d.length >= 7 && d.length <= 15 ? '+' + d : null;
+  }
+
+  // ── sexo (absorbe CimaFieldCatalog.normSex del escritorio, de2846) ───────
+  // Se guarda F | M | '' . NUNCA se deduce del título (Dr./Dra.). «Prefiero no decir» = vacío.
+  const SEX = [{ v: 'F', t: 'Femenino' }, { v: 'M', t: 'Masculino' }];
+  function normSex(v) {
+    const s = str(v).trim().toLowerCase();
+    if (!s) return '';
+    if (s === 'f' || /^(fem|muj|woman|female)/.test(s)) return 'F';
+    if (s === 'm' || /^(mas|hom|man|male)/.test(s)) return 'M';
+    return '';
+  }
+  function sex(v) {
+    const s = str(v).trim().toLowerCase();
+    if (!s) return ok('');
+    if (/^(prefiero|no (dec|sab|resp)|n\/?a$|otro|ninguno|-)/.test(s)) return ok('');
+    const n = normSex(v);
+    return n ? ok(n) : bad('El sexo es F (femenino) o M (masculino); puede quedar vacío.', s);
+  }
+
+  // ── país (ISO 3166-1 alfa-2; nunca texto libre) ──────────────────────────
+  const _strip = (s) => str(s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  function country(v) {
+    const raw = str(v).trim();
+    if (!raw) return ok('');
+    const up = raw.toUpperCase();
+    if (/^[A-Z]{2}$/.test(up)) return ok(up);   // la forma ISO se acepta tal cual; que exista lo decide el catálogo de países del servidor
+    const k = _strip(raw);
+    const byName = COUNTRIES.find((c) => _strip(c.name) === k) || (k === 'estados unidos' || k === 'usa' || k === 'ee.uu.' || k === 'eeuu' ? COUNTRIES.find((c) => c.iso === 'US') : null);
+    return byName ? ok(byName.iso) : bad('El país se guarda con su código de 2 letras (VE, CO, CL…).', raw);
+  }
+
+  // ── tipo de documento: viejo → código (de2846; «Cedula» → V, «Otro» → vacío) ──
+  function normDocType(t, iso) {
+    const u = str(t).trim().toUpperCase().replace(/[.\s]/g, '');
+    if (!u || u === 'OTRO' || u === 'OTHER') return '';
+    if (u === 'CEDULA' || u === 'CÉDULA') { const l = COUNTRY_DOCS[str(iso).trim().toUpperCase()] || COUNTRY_DOCS.VE; return l[0]; }
+    if (u === 'PASAPORTE' || u === 'PASSPORT') return 'P';
+    return u;
+  }
+
   const TYPES = {
-    email, phone, doc, date, name, number, url, instagram, username, password, text,
+    email, phone, doc, date, name, number, url, instagram, username, password, text, sex, country,
     birth: (v, o) => date(v, Object.assign({}, o, { birth: true }))
   };
 
@@ -417,7 +494,7 @@
     return { ok: all, values, errors };
   }
 
-  const FR = { check, checkAll, docDigits, phoneParts, COUNTRIES, COUNTRY_DOCS, DOC_RULES, TYPES: Object.keys(TYPES) };
+  const FR = { check, checkAll, docDigits, phoneParts, phoneCanon, normSex, normDocType, EMAIL_RE, SEX, PHONE_HOMES, COUNTRIES, COUNTRY_DOCS, DOC_RULES, TYPES: Object.keys(TYPES) };
   if (typeof module === 'object' && module && module.exports) module.exports = FR;
   root.FieldRules = FR;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
