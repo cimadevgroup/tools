@@ -72,7 +72,7 @@
         { "fn": "check", "type": "email", "in": "  Ana.Perez@Correo.COM ", "out": "ana.perez@correo.com" },
         { "fn": "check", "type": "email", "in": "ana@correo", "error": true }
       ] },
-    { "id": "address", "grupo": "Contacto", "estado": "implementado", "titulo": "Dirección",
+    { "id": "address", "grupo": "Contacto", "estado": "catalogado", "fase": "F3 (validador; FieldFormat.address ya muestra)", "titulo": "Dirección",
       "guardado": "Objeto {line1, line2, city, state, postal, country ISO}. País obligatorio. Código postal según el país.",
       "mostrado": "Una línea: «Av. Principal 12, Piso 3, Caracas, Miranda 1060, Venezuela».",
       "regla": "country es ISO alfa-2 (tipo country); las demás partes son texto.",
@@ -85,6 +85,7 @@
       "mostrado": "Tal cual.", "regla": "Letras, espacios, apóstrofo y guion.",
       "ejemplos": [
         { "fn": "check", "type": "name", "in": "  María   José ", "out": "María José" },
+        { "fn": "check", "type": "name", "in": "MARIA JOSE", "out": "Maria Jose" },
         { "fn": "check", "type": "name", "in": "Ana2", "error": true }
       ] },
     { "id": "sex", "grupo": "Persona", "estado": "implementado", "titulo": "Sexo",

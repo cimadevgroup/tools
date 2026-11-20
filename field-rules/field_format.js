@@ -50,7 +50,7 @@
     const s = str(v).trim();
     if (!s) return '';
     let m;
-    if ((m = /^(V|E)-(\d+)$/.exec(s))) return m[1] + '-' + m[2];                 // V-5142891 (sin puntos, sin ceros)
+    if ((m = /^(V|E)-(\d+)$/i.exec(s))) return m[1].toUpperCase() + '-' + m[2].replace(/^0+(?=\d)/, '');                 // V-5142891 (sin puntos, sin ceros)
     if ((m = /^(\d{7,8})-([0-9K])$/.exec(s))) return dots(m[1]) + '-' + m[2];     // RUT 12.345.678-5
     if ((m = /^(\d{6,10})-(\d)$/.exec(s))) return dots(m[1]) + '-' + m[2];        // NIT 900.123.456-8
     if (/^\d{11}$/.test(s)) return s.slice(0, 2) + '-' + s.slice(2, 10) + '-' + s.slice(10);   // CUIT 20-12345678-3
@@ -60,7 +60,7 @@
 
   // ── fechas ───────────────────────────────────────────────────────────────
   function parts(s) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str(s).trim());
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:T|$)/.exec(str(s).trim());
     if (!m) return null;
     const y = +m[1], mo = +m[2], d = +m[3];
     const dt = new Date(Date.UTC(y, mo - 1, d));
@@ -69,6 +69,7 @@
   }
   function todayISO(opts) {
     if (opts && opts.today) return String(opts.today);
+    if (opts && opts.timezone) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: opts.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { /* reloj local */ } }
     const n = new Date();
     return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
   }
@@ -92,9 +93,11 @@
   // instante ISO UTC (con Z) o epoch ms → «10 nov 2026, 15:45» en la zona del consultorio (opts.timezone, IANA; sin zona = UTC)
   function instant(v, opts) {
     let dt;
-    if (typeof v === 'number') dt = new Date(v);
-    else if (/^\d{10,}$/.test(str(v).trim())) dt = new Date(Number(v));
-    else dt = new Date(str(v).trim());
+    const sv = str(v).trim();
+    if (typeof v === 'number' && v >= 1e12) dt = new Date(v);
+    else if (/^\d{13}$/.test(sv)) dt = new Date(Number(sv));
+    else if (/^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:?\d{2})$/.test(sv)) dt = new Date(sv);   // sin Z ni desfase no se adivina la zona
+    else return sv;
     if (isNaN(dt.getTime())) return str(v);
     const tz = (opts && opts.timezone) || 'UTC';
     let f;
@@ -106,16 +109,18 @@
   }
 
   // ── dinero ───────────────────────────────────────────────────────────────
+  const THREE_DEC = { KWD: 1, BHD: 1, JOD: 1, OMR: 1, TND: 1 };
   const ZERO_DEC = { CLP: 1, JPY: 1, PYG: 1, KRW: 1, VND: 1 };
   function grouped(intStr) { return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
   function money(v, opts) {
     if (!v || typeof v !== 'object') return str(v);
     const cur = str(v.currency).toUpperCase();
+    if (v.amount_minor === null || v.amount_minor === undefined || v.amount_minor === '') return '';
     const minor = Number(v.amount_minor);
     if (!Number.isFinite(minor) || !Number.isInteger(minor)) return str(v.amount_minor);
-    const dec = ZERO_DEC[cur] ? 0 : 2;
+    const dec = ZERO_DEC[cur] ? 0 : (THREE_DEC[cur] ? 3 : 2);
     const neg = minor < 0, abs = Math.abs(minor);
-    const unit = dec ? Math.floor(abs / 100) : abs, frac = dec ? String(abs % 100).padStart(2, '0') : '';
+    const pw = Math.pow(10, dec), unit = Math.floor(abs / pw), frac = dec ? String(abs % pw).padStart(dec, '0') : '';
     return (neg ? '-' : '') + grouped(String(unit)) + (dec ? ',' + frac : '') + (cur && !(opts && opts.noCurrency) ? ' ' + cur : '');
   }
   function number(v, opts) {
@@ -133,6 +138,7 @@
     if (!Array.isArray(v) || !v.length) return '';
     const byDow = {};
     v.forEach((x) => { if (x && x.dow >= 1 && x.dow <= 7) (byDow[x.dow] = byDow[x.dow] || []).push(str(x.open) + '–' + str(x.close)); });
+    Object.keys(byDow).forEach((k) => byDow[k].sort());
     const days = Object.keys(byDow).map(Number).sort((a, b) => a - b);
     const out = []; let i = 0;
     while (i < days.length) {
@@ -161,12 +167,14 @@
     return lines.concat(area, c ? [c] : []).join(', ');
   }
   function sex(v) {
-    const s = str(v).trim().toUpperCase();
+    const FR = FRref();
+    const s = FR && FR.normSex ? FR.normSex(v) : str(v).trim().toUpperCase();
     return s === 'F' ? 'Femenino' : s === 'M' ? 'Masculino' : (s ? s : 'Prefiero no decir');
   }
 
   const SHOWERS = {
     phone, phone2: phone, emerg_phone: phone, whatsapp: phone, doc: doc, doc_number: doc, tax_id: doc,
+    instagram: (v) => (str(v).trim() ? '@' + str(v).trim().replace(/^@/, '') : ''),
     date, birthdate, birth: birthdate, instant, money, number, hours, opening_hours: hours, address, sex, country: countryName
   };
   function show(id, v, opts) {

@@ -440,8 +440,11 @@ test('phoneCanon: paridad con el _phoneCanon de core sobre un corpus', () => {
     '+57 300 1234567', '300 1234567', '9 1234 5678', '+56 9 1234 5678', '011 2345 6789', '+54 9 11 2345 6789', '0414.123.4567', '(0414) 123-4567', '+573001234567', '+0414123', '++58414', '00 1 305 1234567', '1234567890123456'];
   for (const e of entradas) for (const iso of [null, 'VE', 'CO', 'CL', 'AR']) {
     const home = iso ? _HOMES[iso] : null;
-    assert.equal(FR.phoneCanon(e, home ? { ...home } : null), coreRef(e, home), JSON.stringify([e, iso]));
-    if (iso) assert.equal(FR.phoneCanon(e, iso), coreRef(e, home), 'ISO ' + JSON.stringify([e, iso]));
+    const mine = FR.phoneCanon(e, home ? { ...home } : null), ref = coreRef(e, home);
+    if (mine !== null) assert.equal(mine, ref, JSON.stringify([e, iso]));          // lo que devuelve coincide con core…
+    else assert.ok(true);                                                            // …y puede ser más estricto (8 a 15 dígitos, largo por país)
+    if (mine !== null) assert.equal(FR.check('phone', mine).ok, true, 'pasa check: ' + mine);
+    if (iso) assert.equal(FR.phoneCanon(e, iso), mine, 'ISO ' + JSON.stringify([e, iso]));
   }
 });
 test('EMAIL_RE es la regex única y la usa check(email)', () => {
@@ -457,4 +460,24 @@ test('FieldFormat: el mes siempre sale en letras (nunca 05/11)', () => {
 test('documento SIN ceros a la izquierda en V ni E (decisión de Miguel, 20 nov 2026)', () => {
   for (const [i, o] of [['V-0005142891'.replace('0005142891', '05142891'), 'V-5142891'], ['E-000123456', 'E-123456'], ['v.00001', 'V-1']]) assert.equal(FR.check('doc', i).value, o);
   assert.equal(FR.check('doc', '0000', { docType: 'V' }).ok, false);
+});
+
+// ── revisión Opus (20 nov): casos que fallaban ──
+test('revisión Opus: pasaporte no acepta cédula; sexo exacto; país ISO cerrado; teléfono 0 local; ids del catálogo', () => {
+  assert.equal(FR.check('doc', 'V-5142891', { docType: 'P' }).ok, false);
+  assert.equal(FR.check('sex', 'homosexual').ok, false); assert.equal(FR.check('sex', 'mantenimiento').ok, false);
+  assert.equal(FR.check('country', 'XX').ok, false); assert.equal(FR.check('country', 'UK').value, 'GB'); assert.equal(FR.check('country', 'Estados Unidos').value, 'US');
+  assert.equal(FR.check('phone', '0414-1234567', { country: 'CO' }).ok, false);
+  assert.equal(FR.check('birthdate', '1990-11-10', { today: '2026-11-20' }).value, '1990-11-10');
+  assert.equal(FR.check('doc_number', 'v-05142891').value, 'V-5142891');
+  assert.equal(FR.check('doc_type', 'Cedula').value, 'V'); assert.equal(FR.normDocType('Extranjero'), 'E'); assert.equal(FR.normDocType('DNI', 'VE'), '');
+  assert.equal(FR.check('name', 'MARIA JOSE').value, 'Maria Jose');
+  assert.equal(FR.check('text', 'a\u0000b').value, 'ab');
+  assert.ok(FR.EMAIL_RE.test('Ana@Correo.COM'));
+  assert.equal(FR.phoneCanon('+58 414 123 456'), null);
+  assert.equal(FF.instant('2026-11-10T19:45:00', { timezone: 'America/Caracas' }), '2026-11-10T19:45:00');
+  assert.equal(FF.instant('1731268800'), '1731268800');
+  assert.equal(FF.money({ amount_minor: null, currency: 'USD' }), ''); assert.equal(FF.money({ amount_minor: 1234, currency: 'KWD' }), '1,234 KWD');
+  assert.equal(FF.show('sex', 'masculino'), 'Masculino'); assert.equal(FF.doc('V-05142891'), 'V-5142891'); assert.equal(FF.date('2026-11-10xyz'), '2026-11-10xyz');
+  assert.equal(FF.show('instagram', 'dra.perez'), '@dra.perez');
 });

@@ -115,7 +115,7 @@ Versión 1.0.0. **Generado desde catalog.json por gen-catalogo.mjs; no se edita 
 
 ### Dirección · `address`
 
-- **Estado:** implementado
+- **Estado:** catalogado (F3 (validador; FieldFormat.address ya muestra))
 - **Se guarda:** Objeto {line1, line2, city, state, postal, country ISO}. País obligatorio. Código postal según el país.
 - **Se muestra:** Una línea: «Av. Principal 12, Piso 3, Caracas, Miranda 1060, Venezuela».
 - **Regla:** country es ISO alfa-2 (tipo country); las demás partes son texto.
@@ -136,6 +136,7 @@ Versión 1.0.0. **Generado desde catalog.json por gen-catalogo.mjs; no se edita 
 | Llamada | Entrada | Resultado |
 |---|---|---|
 | `FieldRules.check('name', …)` | `"  María   José "` | `"María José"` |
+| `FieldRules.check('name', …)` | `"MARIA JOSE"` | `"Maria Jose"` |
 | `FieldRules.check('name', …)` | `"Ana2"` | **error** (rechaza con mensaje) |
 
 ### Sexo · `sex`

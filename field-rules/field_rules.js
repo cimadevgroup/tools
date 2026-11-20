@@ -49,7 +49,7 @@
   // ── correo ───────────────────────────────────────────────────────────────
   // UNA sola regex para todo el ecosistema (core, escritorio, móvil, portal, páginas). Quien necesite probar un correo usa
   // FieldRules.EMAIL_RE o FieldRules.check('email', …); nadie escribe otra.
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
   function email(v) {
     const s = str(v).trim().toLowerCase();
     if (!s) return ok('');
@@ -86,6 +86,7 @@
     if (d.startsWith(c.code) && d.length - c.code.length >= Math.min.apply(null, c.len) && d.length - c.code.length <= max) {
       d = d.slice(c.code.length);                                            // ya trae el código, sin «+»
     } else {
+      if (d.charAt(0) === '0' && ['CO', 'US', 'DO', 'CL', 'MX', 'ES', 'PA', 'PT'].indexOf(c.iso) >= 0) return bad('Un número de ' + c.name + ' no lleva 0 inicial. Si es de otro país, escríbelo con + (p. ej. +58).', raw);
       d = d.replace(/^0+/, '');                                              // 0 de marcación local
     }
     if (c.iso === 'AR') {
@@ -194,6 +195,7 @@
     if (list.indexOf(t) < 0) return bad('Tipo de documento desconocido para este país (' + list.join(', ') + ').', raw);
     const c = raw.toUpperCase().replace(/[\s.\-]/g, '');
     if (t === 'P') {
+      if (/^[VE][\s.-]*\d+$/i.test(raw)) return bad('Eso parece una cédula (V o E), no un pasaporte. Elige el tipo de documento correcto.', raw);
       const p = /^P[\s.-]/i.test(raw) ? c.slice(1) : c;   // «P-AB12345» → AB12345; «PA123456» se queda entero
       if (!/^[A-Z0-9]+$/.test(p)) return bad('El pasaporte lleva solo letras y números.', raw);
       if (p.length < 5 || p.length > 15) return bad('El pasaporte lleva entre 5 y 15 letras y números.', raw);
@@ -240,6 +242,7 @@
     let t = (opts && opts.docType) ? String(opts.docType).toUpperCase() : '';
     let rest = raw.toUpperCase();
     const m = rest.match(/^([VEJGP])(?:[\s.-]+|(?=\d))(.*)$/);
+    if (t === 'P' && /^[VE][\s.-]*\d+$/i.test(rest)) return bad('Eso parece una cédula (V o E), no un pasaporte. Elige el tipo de documento correcto.', raw);
     if (t === 'P') {
       // pasaporte: solo se quita «P-» si trae separador (P123456 puede ser el pasaporte entero)
       const mp = rest.match(/^P[\s.-]+(.*)$/);
@@ -286,6 +289,7 @@
   }
   function todayISO(opts) {
     if (opts && opts.today) return String(opts.today);
+    if (opts && opts.timezone) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: opts.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { /* zona inválida: reloj local */ } }
     const n = new Date();
     return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
   }
@@ -319,6 +323,7 @@
     if (!s) return ok('');
     if (s.length > 60) return bad('El nombre es demasiado largo (máximo 60 caracteres).', s);
     if (!/^[\p{L}][\p{L}\s'’-]*$/u.test(s)) return bad('Un nombre no lleva números ni símbolos.', s);
+    if (s === s.toUpperCase() || s === s.toLowerCase()) return ok(s.toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()));
     return ok(s);
   }
 
@@ -392,7 +397,7 @@
   // ── texto libre ──────────────────────────────────────────────────────────
   function text(v, opts) {
     const max = (opts && opts.max) || 200;
-    const s = str(v).trim();
+    const s = str(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
     if (s.length > max) return bad('Es demasiado largo (máximo ' + max + ' caracteres).', s);
     return ok(s);
   }
@@ -426,7 +431,11 @@
       else if (dl && d.startsWith(dl) && d.length >= dl.length + (home.nsn_min || 10)) { /* ya trae el código de país sin «+» */ }
       else return null;
     } else return null;
-    return d.length >= 7 && d.length <= 15 ? '+' + d : null;
+    if (d.length < 8 || d.length > 15) return null;
+    let own = null;
+    for (const c of PHONE_HOMES) if (d.startsWith(c.dial) && (!own || c.dial.length > own.dial.length)) own = c;
+    if (own) { const n = d.length - own.dial.length; if (n < own.nsn_min || n > own.nsn_max) return null; if (own.code === 'VE' && ['2', '4'].indexOf(d.charAt(2)) < 0) return null; }
+    return '+' + d;   // más estricto que _phoneCanon de core (7 a 15 sin largo por país): lo que devuelve siempre pasa check('phone')
   }
 
   // ── sexo (absorbe CimaFieldCatalog.normSex del escritorio, de2846) ───────
@@ -435,42 +444,56 @@
   function normSex(v) {
     const s = str(v).trim().toLowerCase();
     if (!s) return '';
-    if (s === 'f' || /^(fem|muj|woman|female)/.test(s)) return 'F';
-    if (s === 'm' || /^(mas|hom|man|male)/.test(s)) return 'M';
+    if (/^(f|fem|femenino|femenina|mujer|woman|female)$/.test(s)) return 'F';
+    if (/^(m|mas|masculino|hombre|varon|varón|man|male)$/.test(s)) return 'M';
     return '';
   }
   function sex(v) {
     const s = str(v).trim().toLowerCase();
     if (!s) return ok('');
-    if (/^(prefiero|no (dec|sab|resp)|n\/?a$|otro|ninguno|-)/.test(s)) return ok('');
+    if (/^(prefiero no decir|no (dec|sab|resp)\w*|n\/?a|otro|ninguno)$/.test(s)) return ok('');
     const n = normSex(v);
     return n ? ok(n) : bad('El sexo es F (femenino) o M (masculino); puede quedar vacío.', s);
   }
 
   // ── país (ISO 3166-1 alfa-2; nunca texto libre) ──────────────────────────
   const _strip = (s) => str(s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  const ISO2 = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ');
   function country(v) {
     const raw = str(v).trim();
     if (!raw) return ok('');
     const up = raw.toUpperCase();
-    if (/^[A-Z]{2}$/.test(up)) return ok(up);   // la forma ISO se acepta tal cual; que exista lo decide el catálogo de países del servidor
+    if (up === 'UK') return ok('GB');
+    if (/^[A-Z]{2}$/.test(up)) return ISO2.indexOf(up) >= 0 ? ok(up) : bad('«' + up + '» no es un código de país ISO (VE, CO, CL…).', raw);
     const k = _strip(raw);
-    const byName = COUNTRIES.find((c) => _strip(c.name) === k) || (k === 'estados unidos' || k === 'usa' || k === 'ee.uu.' || k === 'eeuu' ? COUNTRIES.find((c) => c.iso === 'US') : null);
+    const byName = (k === 'estados unidos' || k === 'usa' || k === 'ee.uu.' || k === 'eeuu') ? COUNTRIES.find((c) => c.iso === 'US') : COUNTRIES.find((c) => _strip(c.name) === k);
     return byName ? ok(byName.iso) : bad('El país se guarda con su código de 2 letras (VE, CO, CL…).', raw);
   }
 
   // ── tipo de documento: viejo → código (de2846; «Cedula» → V, «Otro» → vacío) ──
   function normDocType(t, iso) {
-    const u = str(t).trim().toUpperCase().replace(/[.\s]/g, '');
+    const u = str(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/[.\s]/g, '');
+    const list = COUNTRY_DOCS[str(iso).trim().toUpperCase()] || COUNTRY_DOCS.VE;
     if (!u || u === 'OTRO' || u === 'OTHER') return '';
-    if (u === 'CEDULA' || u === 'CÉDULA') { const l = COUNTRY_DOCS[str(iso).trim().toUpperCase()] || COUNTRY_DOCS.VE; return l[0]; }
-    if (u === 'PASAPORTE' || u === 'PASSPORT') return 'P';
-    return u;
+    let r = u;
+    if (u === 'CEDULA' || u === 'CI' || u === 'VENEZOLANO') r = list[0];
+    else if (u === 'EXTRANJERO') r = 'E';
+    else if (u === 'PASAPORTE' || u === 'PASSPORT') r = 'P';
+    return list.indexOf(r) >= 0 ? r : '';
   }
 
+  function doc_type(v, opts) {
+    const iso = str(opts && opts.country).trim().toUpperCase();
+    const c = normDocType(v, iso);
+    return c ? ok(c) : (str(v).trim() ? bad('Tipo de documento desconocido para este país.', str(v)) : ok(''));
+  }
   const TYPES = {
     email, phone, doc, date, name, number, url, instagram, username, password, text, sex, country,
-    birth: (v, o) => date(v, Object.assign({}, o, { birth: true }))
+    birth: (v, o) => date(v, Object.assign({}, o, { birth: true })),
+    doc_type,
+    // ids del catálogo (catalog.json) → el mismo validador
+    birthdate: (v, o) => date(v, Object.assign({}, o, { birth: true })),
+    doc_number: doc, tax_id: doc, phone2: phone, emerg_phone: phone, whatsapp: phone
   };
 
   function check(type, value, opts) {
@@ -494,7 +517,7 @@
     return { ok: all, values, errors };
   }
 
-  const FR = { check, checkAll, docDigits, phoneParts, phoneCanon, normSex, normDocType, EMAIL_RE, SEX, PHONE_HOMES, COUNTRIES, COUNTRY_DOCS, DOC_RULES, TYPES: Object.keys(TYPES) };
+  const FR = { check, checkAll, docDigits, phoneParts, phoneCanon, normSex, normDocType, EMAIL_RE, SEX, ISO2, PHONE_HOMES, COUNTRIES, COUNTRY_DOCS, DOC_RULES, TYPES: Object.keys(TYPES) };
   if (typeof module === 'object' && module && module.exports) module.exports = FR;
   root.FieldRules = FR;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
