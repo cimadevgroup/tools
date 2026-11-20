@@ -78,6 +78,7 @@
     function lookAhead() {   // con + o 00 al inicio el país sale del propio número
       var raw = String(input.value || '').trim();
       if (!/^(\+|00)/.test(raw)) return false;
+      if (!/\d/.test(raw.replace(/^(\+|00)/, ''))) return false;   // «+» o «00» solos: se siguen escribiendo, no se borran
       var p = FR.phoneParts(raw, { defaultCountry: dflt });
       if (!p.iso) return false;
       pick(p); input.value = p.national;
@@ -87,7 +88,7 @@
     input.addEventListener('paste', function () { setTimeout(lookAhead, 0); });
     input.addEventListener('blur', function () {
       var raw = String(input.value || '').trim();
-      if (/^(\+|00)/.test(raw)) { var p = FR.phoneParts(raw, { defaultCountry: dflt }); pick(p); input.value = p.national; }
+      if (/^(\+|00)\d/.test(raw)) { var p = FR.phoneParts(raw, { defaultCountry: dflt }); if (p.code && p.national) { pick(p); input.value = p.national; } }
       var r = get();
       if (r.ok && r.value) set(r.value); else mark(r.ok, r.msg);
     });
