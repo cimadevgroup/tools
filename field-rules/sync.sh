@@ -4,15 +4,16 @@
 #   ./sync.sh --repo NOMBRE           solo ese repo
 #   ./sync.sh --check [--repo NOMBRE] compara sin escribir; sale con 1 si una copia FALTA, DIFIERE, hay una copia FUERA DE LISTA
 #                                     o el bloque CAMPOS del CLAUDE.md falta o difiere
+#   ./sync.sh --claude-only [--repo N] solo reescribe el bloque de CLAUDE.md (repos donde CLAUDE.md no se versiona)
 #   ./sync.sh --list                  repos y destinos
 # Navegador → .js (+ cabecera); servidores (Workers) → .mjs: mismo texto + `export default`. Cabecera: «COPIA … VERSION x sha256:… no editar».
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DEV="${FR_DEV:-$(cd "$HERE/../../.." && pwd)}"   # FR_DEV: raíz alterna (worktrees) para probar antes de publicar
 VER="$(head -1 "$HERE/VERSION" | tr -d '[:space:]')"
-MODE=write; ONLY=""
+MODE=write; ONLY=""; CLAUDE_ONLY=""
 while [ $# -gt 0 ]; do case "$1" in
-  --check) MODE=check;; --list) MODE=list;; --repo) shift; ONLY="${1:-}";; *) echo "argumento desconocido: $1" >&2; exit 2;; esac; shift; done
+  --check) MODE=check;; --list) MODE=list;; --claude-only) CLAUDE_ONLY=1;; --repo) shift; ONLY="${1:-}";; *) echo "argumento desconocido: $1" >&2; exit 2;; esac; shift; done
 
 # repo | ruta del repo | carpeta de las copias | fuentes (field_rules field_format role_fields phone_input) | tipo (js navegador | mjs servidor)
 REPOS=(
@@ -59,7 +60,7 @@ for entry in "${REPOS[@]}"; do
       if [ ! -f "$full" ]; then note "FALTA   $name/$rel"
       elif ! diff -q <(render "$s" "$kind") "$full" >/dev/null; then note "DIFIERE $name/$rel"
       else note "OK      $name/$rel"; fi
-    else mkdir -p "$(dirname "$full")"; render "$s" "$kind" > "$full"; note "copiado $name/$rel"; fi
+    elif [ -z "$CLAUDE_ONLY" ]; then mkdir -p "$(dirname "$full")"; render "$s" "$kind" > "$full"; note "copiado $name/$rel"; fi
   done
   # copias FUERA DE LISTA: archivos rastreados con nombre de fuente que no están en la lista de este repo
   if git -C "$root" rev-parse >/dev/null 2>&1; then
@@ -86,7 +87,7 @@ open(p,'w').write(s)
 PY
     else printf '\n%s\n' "$(block_text)" >> "$cm"; fi
     note "bloque  $name/CLAUDE.md"
-    if [ -f "$HOOK_SRC" ]; then mkdir -p "$root/.githooks"; cp "$HOOK_SRC" "$root/.githooks/pre-commit"; chmod +x "$root/.githooks/pre-commit"; note "hook    $name/.githooks/pre-commit"; fi
+    if [ -z "$CLAUDE_ONLY" ] && [ -f "$HOOK_SRC" ]; then mkdir -p "$root/.githooks"; cp "$HOOK_SRC" "$root/.githooks/pre-commit"; chmod +x "$root/.githooks/pre-commit"; note "hook    $name/.githooks/pre-commit"; fi
   fi
 done
 [ "$MODE" = check ] && { [ $bad = 0 ] && echo "TODO COINCIDE (copias, bloque de CLAUDE.md, hook)" || { echo "HAY DIFERENCIAS: corre tools/field-rules/sync.sh (nunca edites una copia)"; exit 1; }; }
