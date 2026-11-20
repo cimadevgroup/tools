@@ -5,15 +5,16 @@
 #   ./sync.sh --check [--repo NOMBRE] compara sin escribir; sale con 1 si una copia FALTA, DIFIERE, hay una copia FUERA DE LISTA
 #                                     o el bloque CAMPOS del CLAUDE.md falta o difiere
 #   ./sync.sh --claude-only [--repo N] solo reescribe el bloque de CLAUDE.md (repos donde CLAUDE.md no se versiona)
+#   ./sync.sh --check --repo N --dir RUTA  compara contra RUTA (el directorio desde el que se despliega), no contra el checkout principal
 #   ./sync.sh --list                  repos y destinos
 # Navegador → .js (+ cabecera); servidores (Workers) → .mjs: mismo texto + `export default`. Cabecera: «COPIA … VERSION x sha256:… no editar».
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DEV="${FR_DEV:-$(cd "$HERE/../../.." && pwd)}"   # FR_DEV: raíz alterna (worktrees) para probar antes de publicar
 VER="$(head -1 "$HERE/VERSION" | tr -d '[:space:]')"
-MODE=write; ONLY=""; CLAUDE_ONLY=""
+MODE=write; ONLY=""; CLAUDE_ONLY=""; DIROVR=""
 while [ $# -gt 0 ]; do case "$1" in
-  --check) MODE=check;; --list) MODE=list;; --claude-only) CLAUDE_ONLY=1;; --repo) shift; ONLY="${1:-}";; *) echo "argumento desconocido: $1" >&2; exit 2;; esac; shift; done
+  --check) MODE=check;; --list) MODE=list;; --claude-only) CLAUDE_ONLY=1;; --repo) shift; ONLY="${1:-}";; --dir) shift; DIROVR="${1:-}";; *) echo "argumento desconocido: $1" >&2; exit 2;; esac; shift; done
 
 # repo | ruta del repo | carpeta de las copias | fuentes (field_rules field_format role_fields phone_input) | tipo (js navegador | mjs servidor)
 REPOS=(
@@ -50,7 +51,7 @@ for entry in "${REPOS[@]}"; do
   IFS='|' read -r name path dir srcs kind <<<"$entry"
   [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && continue
   if [ "$MODE" = list ]; then for s in $srcs; do echo "$name  $path/$dir/$s.${kind}"; done; continue; fi
-  root="$DEV/$path"
+  root="$DEV/$path"; [ -n "$DIROVR" ] && [ -n "$ONLY" ] && root="$DIROVR"   # --dir: comparar contra ESE directorio (worktree o carpeta de deploy), no contra el checkout principal
   [ -d "$root" ] || { note "FALTA  repo $path"; continue; }
   want=""
   for s in $srcs; do
