@@ -1,0 +1,2 @@
+## Campos estándar (obligatorio)
+Documento, teléfono, correo, sexo, fechas, país, dirección, dinero, URL y redes siguen modular-mango/tools/field-rules/CATALOGO.md. Se captura solo con los componentes Cima*Field y se valida y muestra con FieldRules/FieldFormat. Las copias no se editan: se cambia la fuente y se corre sync.sh. Un tipo nuevo se agrega primero al catálogo. Core normaliza siempre al escribir.
