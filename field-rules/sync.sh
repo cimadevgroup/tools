@@ -20,13 +20,14 @@ while [ $# -gt 0 ]; do case "$1" in
 REPOS=(
   "cima-desktop|cima/cima-desktop|app/ui|field_rules field_format role_fields phone_input|js"
   "cima-mobile|cima/cima-mobile|app/ui|field_rules field_format|js"
-  "cima-patient|cima/cima-patient|app/ui|field_rules field_format|js"
+  "cima-patient|cima/cima-patient|app/ui|field_rules field_format phone_input|js"
   "cima-landing|cima/cima-landing|app/landing|field_rules field_format phone_input|js"
   "myvitalcase|cima/myvitalcase|app/ui|field_rules field_format|js"
   "cima-server|cima/cima-server|.|field_rules field_format role_fields|mjs"
   "cima-crm-server|cima/cima-crm-server|.|field_rules field_format|mjs"
   "myvitalcase-server|cima/myvitalcase-server|worker|field_rules field_format|mjs"
   "paginas-consultorio|cima/paginas-consultorio|src|field_rules field_format|mjs"
+  "paginas-consultorio|cima/paginas-consultorio|public|field_rules phone_input|js"
   "base-server|base/base-server|worker|field_rules field_format role_fields|mjs"
   "base-desktop|base/base-desktop|modules|field_rules field_format role_fields phone_input|js"
 )
@@ -54,6 +55,7 @@ for entry in "${REPOS[@]}"; do
   root="$DEV/$path"; [ -n "$DIROVR" ] && [ -n "$ONLY" ] && root="$DIROVR"   # --dir: comparar contra ESE directorio (worktree o carpeta de deploy), no contra el checkout principal
   [ -d "$root" ] || { note "FALTA  repo $path"; continue; }
   want=""
+  for e2 in "${REPOS[@]}"; do IFS='|' read -r n2 p2 d2 s2 k2 <<<"$e2"; [ "$p2" = "$path" ] && [ "$e2" != "$entry" ] && for t in $s2; do r2="$d2/$t.$k2"; want="$want ${r2#./}"; done; done   # varias filas por repo (carpetas distintas): lo declarado por las demás tampoco es «fuera de lista»
   for s in $srcs; do
     rel="$dir/$s.$kind"; rel="${rel#./}"; want="$want $rel"
     full="$root/$rel"
