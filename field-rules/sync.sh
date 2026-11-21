@@ -25,7 +25,7 @@ REPOS=(
   "myvitalcase|cima/myvitalcase|app/ui|field_rules field_format|js"
   "cima-server|cima/cima-server|.|field_rules field_format role_fields|mjs"
   "cima-crm-server|cima/cima-crm-server|.|field_rules field_format|mjs"
-  "mi-cima-server|cima/mi-cima-server|worker|field_rules field_format|mjs"
+  "myvitalcase-server|cima/myvitalcase-server|worker|field_rules field_format|mjs"
   "paginas-consultorio|cima/paginas-consultorio|src|field_rules field_format|mjs"
   "base-server|base/base-server|worker|field_rules field_format role_fields|mjs"
   "base-desktop|base/base-desktop|modules|field_rules field_format role_fields phone_input|js"
