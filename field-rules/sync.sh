@@ -22,7 +22,7 @@ REPOS=(
   "cima-mobile|cima/cima-mobile|app/ui|field_rules field_format|js"
   "cima-patient|cima/cima-patient|app/ui|field_rules field_format|js"
   "cima-landing|cima/cima-landing|app/landing|field_rules field_format phone_input|js"
-  "mi-cima|cima/mi-cima|app/ui|field_rules field_format|js"
+  "vitalcase|cima/vitalcase|app/ui|field_rules field_format|js"
   "cima-server|cima/cima-server|.|field_rules field_format role_fields|mjs"
   "cima-crm-server|cima/cima-crm-server|.|field_rules field_format|mjs"
   "mi-cima-server|cima/mi-cima-server|worker|field_rules field_format|mjs"
