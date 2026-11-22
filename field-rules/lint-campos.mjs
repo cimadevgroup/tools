@@ -13,13 +13,13 @@ const repo = args[args.indexOf('--repo') + 1] || process.cwd();
 const staged = args.includes('--staged'), baseline = args.includes('--baseline');
 const CAT = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.url), 'utf8'));
 const TIPOS = new Set(CAT.lint.tipos_input), IDS = new Set(CAT.lint.ids);
-const SKIP = /(^|\/)(node_modules|vendor|\.wt|\.claude|www|public\/modules|dist)\/|\.min\.|(^|\/)(field_rules|field_format|role_fields|phone_input)\.m?js$/;
+const SKIP = /(^|\/)(node_modules|vendor|\.wt|\.claude|www|public\/modules|dist)\/|\.min\.|(^|\/)(field_rules|field_format|role_fields|phone_input|date_field)\.m?js$/;
 
 const git = (a) => execFileSync('git', ['-C', repo, ...a], { encoding: 'utf8', maxBuffer: 1 << 28 });
 const files = (staged ? git(['diff', '--cached', '--name-only', '--diff-filter=ACM']) : git(['ls-files'])).split('\n')
   .filter((f) => /\.(html|js|mjs)$/.test(f) && !SKIP.test(f));
 
-const attr = (tag, n) => { const m = new RegExp('\\b' + n + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i').exec(tag); return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null; };
+const attr = (tag, n) => { const m = new RegExp('(?<![\\w-])' + n + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i').exec(tag); return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null; };
 const words = (s) => s.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 
 const found = new Map();   // clave → [archivo:línea]
@@ -32,7 +32,9 @@ for (const f of files) {
     const type = (attr(tag, 'type') || '').toLowerCase(), id = attr(tag, 'id'), name = attr(tag, 'name');
     const hit = TIPOS.has(type) || words((id || '') + ' ' + (name || '')).some((w) => IDS.has(w));
     if (!hit) continue;
-    const key = f + '#' + (id || name || type);
+    // Clave estable: un id/name armado en código («doc-tpl-sel-' + sfx + '» o «${id}») se corta en la parte literal; si no queda nada, sigue el otro atributo o el tipo.
+    const lit = (v) => (v || '').split(/['"`$ ]/)[0];
+    const key = f + '#' + (lit(id) || lit(name) || type || 'campo');
     const line = txt.slice(0, m.index).split('\n').length;
     (found.get(key) || found.set(key, []).get(key)).push(f + ':' + line);
   }

@@ -18,9 +18,9 @@ while [ $# -gt 0 ]; do case "$1" in
 
 # repo | ruta del repo | carpeta de las copias | fuentes (field_rules field_format role_fields phone_input) | tipo (js navegador | mjs servidor)
 REPOS=(
-  "cima-desktop|cima/cima-desktop|app/ui|field_rules field_format role_fields phone_input|js"
-  "cima-mobile|cima/cima-mobile|app/ui|field_rules field_format|js"
-  "cima-patient|cima/cima-patient|app/ui|field_rules field_format phone_input|js"
+  "cima-desktop|cima/cima-desktop|app/ui|field_rules field_format role_fields phone_input date_field|js"
+  "cima-mobile|cima/cima-mobile|app/ui|field_rules field_format date_field|js"
+  "cima-patient|cima/cima-patient|app/ui|field_rules field_format phone_input date_field|js"
   "cima-landing|cima/cima-landing|app/landing|field_rules field_format phone_input|js"
   "myvitalcase|cima/myvitalcase|app/ui|field_rules field_format|js"
   "cima-server|cima/cima-server|.|field_rules field_format role_fields|mjs"
@@ -31,7 +31,7 @@ REPOS=(
   "base-server|base/base-server|worker|field_rules field_format role_fields|mjs"
   "base-desktop|base/base-desktop|modules|field_rules field_format role_fields phone_input|js"
 )
-glob_of() { case "$1" in field_rules) echo FieldRules;; field_format) echo FieldFormat;; role_fields) echo RoleFields;; phone_input) echo PhoneInput;; esac; }
+glob_of() { case "$1" in field_rules) echo FieldRules;; field_format) echo FieldFormat;; role_fields) echo RoleFields;; phone_input) echo PhoneInput;; date_field) echo CimaDateField;; esac; }
 sha_of() { shasum -a 256 "$HERE/$1.js" | cut -d' ' -f1; }
 
 render() { # fuente tipo → stdout
@@ -69,7 +69,7 @@ for entry in "${REPOS[@]}"; do
   if git -C "$root" rev-parse >/dev/null 2>&1; then
     while IFS= read -r f; do
       case " $want " in *" $f "*) ;; *) note "FUERA DE LISTA $name/$f (copia no declarada en sync.sh)";; esac
-    done < <(git -C "$root" ls-files | grep -E '(^|/)(field_rules|field_format|role_fields|phone_input)\.m?js$')
+    done < <(git -C "$root" ls-files | grep -E '(^|/)(field_rules|field_format|role_fields|phone_input|date_field)\.m?js$')
   fi
   # bloque de CLAUDE.md
   cm="$root/CLAUDE.md"
