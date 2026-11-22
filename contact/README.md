@@ -2,7 +2,7 @@
 
 Fuente compartida del botón único de contacto: **Escribir por Link**, **Abrir en WhatsApp** (app de la computadora,
 con respaldo a wa.me en el navegador externo) y **Llamar**. Nació en BASE (`base-desktop/modules/contact.js`) y se
-extrajo aquí el 22 nov 2026 sin cambiar su comportamiento. 1.1.0 (22 nov): «Enviar correo» (mailto:) cuando hay email. 1.2.0: colores por tokens --ct-* con respaldo (BASE --win-*, luego CIMA).
+extrajo aquí el 22 nov 2026 sin cambiar su comportamiento. 1.1.0 (22 nov): «Enviar correo» (mailto:) cuando hay email. 1.2.0: colores por tokens --ct-* con respaldo (BASE --win-*, luego CIMA). 1.3.0: sin _blank ni window.open (openExternal configurable; en BASE sima.app.openInside), gancho beforeWhatsApp, textos por CimaI18n.t() y showLink=false para ocultar Link.
 
 - `contact.js` → `window.CimaContact` (y el alias `window.sima.contact` que usa BASE). API en la cabecera del archivo.
 - `contact.css` → botones por fila (`.sima-ct-btn`) y menú flotante (`.sima-ct-menu`); usa los tokens de ventana

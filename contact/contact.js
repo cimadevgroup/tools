@@ -12,6 +12,14 @@
  *           CimaContact.resolvers.<tipo>(id) → Promise<[{label, phone, email?}]>  (para botones con data-ct-src="tipo:id")
  *           CimaContact.linkHandler = (phone, name) => Promise   (cada app conecta su «Link»; si no hay, se usa
  *           window.sima.salesinbox.openByPhone, el de BASE)
+ * Opciones (1.3.0, sin bifurcar la fuente):
+ *           CimaContact.showLink = false            → oculta «Escribir por Link» (en el menú queda «Abrir en WhatsApp»).
+ *           CimaContact.beforeWhatsApp = ctx => Promise<boolean>   ctx = { phone, name }. Se llama ANTES de abrir WhatsApp;
+ *                                                     si rechaza o devuelve false, no se abre nada (p. ej. contact-intent de CIMA).
+ *           CimaContact.openExternal = url => …     cómo abre la app el respaldo wa.me cuando la app de WhatsApp no responde.
+ *                                                     Sin ella: sima.app.openInside (BASE) o, si no hay, copia el enlace y avisa.
+ *                                                     NUNCA target="_blank" ni window.open (regla de CIMA y BASE).
+ *           Textos por CimaI18n.t() cuando existe; si no, en español.
  * Botones : <button data-ct-act="write|call" data-ct-phone=".." data-ct-name=".."> o data-ct-src="tipo:id";
  *           <button data-ct-act="mail" data-ct-email=".."> abre el correo directo.
  * Estilos : contact.css (misma carpeta). Copias por tools/contact/sync.sh; nunca se edita una copia.
@@ -21,6 +29,8 @@
     window.sima = window.sima || {};
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const toast = (m, t) => { try { window.CimaUI && window.CimaUI.toast(m, t); } catch (e) {} };
+    // Textos por la función de traducción de la app (tools/i18n) si existe; el español es la fuente.
+    const T = s => { try { return (window.CimaI18n && typeof window.CimaI18n.t === 'function') ? window.CimaI18n.t(s) : s; } catch (e) { return s; } };
 
     // Dígitos para WhatsApp: con «+» o ya internacional se usan tal cual (sin país no se inventa uno).
     function digits(v) {
@@ -36,15 +46,23 @@
     let _last = { x: 0, y: 0 };
     document.addEventListener('pointerdown', e => { _last = { x: e.clientX, y: e.clientY }; }, true);
 
-    // Navegador externo: único lugar permitido para salir de BASE (wa.me ya es excepción documentada).
+    // Respaldo wa.me cuando la app de WhatsApp no respondió: por el mecanismo de la app (openExternal), o el de BASE
+    // (sima.app.openInside); si no hay ninguno, se copia el enlace y se avisa. Nunca _blank ni window.open.
     function external(url) {
-        const a = document.createElement('a');
-        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.style.display = 'none';
-        document.body.appendChild(a); a.click(); a.remove();
+        try { if (typeof api.openExternal === 'function') { api.openExternal(url); return; } } catch (e) { /* sigue */ }
+        const A = window.sima && window.sima.app;
+        if (A && typeof A.openInside === 'function') { A.openInside({ url, title: 'WhatsApp', icon: 'bi-whatsapp' }); return; }
+        const done = () => toast(T('No se abrió WhatsApp. Copiamos el enlace: pégalo en tu teléfono o en WhatsApp Web.'), 'warn');
+        try { navigator.clipboard.writeText(url).then(done, () => toast(T('No se abrió WhatsApp.') + ' ' + url, 'warn')); } catch (e) { toast(T('No se abrió WhatsApp.') + ' ' + url, 'warn'); }
     }
-    function openWA(phone) {
+    async function openWA(phone, name) {
         const d = digits(phone);
-        if (d.length < 8) { toast('Teléfono no válido para WhatsApp', 'error'); return; }
+        if (d.length < 8) { toast(T('Teléfono no válido para WhatsApp'), 'error'); return; }
+        if (typeof api.beforeWhatsApp === 'function') {   // p. ej. CIMA: contact-intent (pausas del servidor y registro)
+            let go = false;
+            try { go = await api.beforeWhatsApp({ phone, name: name || '' }); } catch (e) { go = false; }
+            if (go === false) return;
+        }
         let left = false;
         const mark = () => { left = true; };
         const onVis = () => { if (document.hidden) mark(); };
@@ -62,20 +80,20 @@
     function call(phone) {
         const s = String(phone || '').trim();
         const t = /^\+/.test(s) ? '+' + s.replace(/\D/g, '') : s.replace(/\D/g, '');
-        if (!t) { toast('Sin teléfono', 'error'); return; }
+        if (!t) { toast(T('Sin teléfono'), 'error'); return; }
         window.location.href = 'tel:' + t;
     }
     const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/;
     const validEmail = v => EMAIL_RE.test(String(v == null ? '' : v).trim());
     function mail(email) {
         const e = String(email == null ? '' : email).trim();
-        if (!validEmail(e)) { toast('Correo no válido', 'error'); return; }
+        if (!validEmail(e)) { toast(T('Correo no válido'), 'error'); return; }
         window.location.href = 'mailto:' + e;   // programa de correo de la computadora; nunca una ventana nueva
     }
     async function link(phone, name) {
         if (typeof api.linkHandler === 'function') { await api.linkHandler(phone, name); return; }   // cada app conecta su Link
         const SI = window.sima && window.sima.salesinbox;
-        if (!SI || !SI.openByPhone) { toast('Link no está disponible', 'error'); return; }
+        if (!SI || !SI.openByPhone) { toast(T('Link no está disponible'), 'error'); return; }
         await SI.openByPhone(phone, name);
     }
 
@@ -93,15 +111,15 @@
         const act = o.act || 'write';
         const phones = (o.phones || []).filter(p => p && (p.phone || (act !== 'call' && validEmail(p.email))));
         close();
-        if (!phones.length) { toast('Sin teléfono registrado', 'warn'); return; }
+        if (!phones.length) { toast(T('Sin teléfono registrado'), 'warn'); return; }
         const rows = phones.map((p, i) => {
             const w = isWA(p);
-            const mailBtn = act !== 'call' && validEmail(p.email) ? `<button type="button" class="sima-ct-it" data-i="${i}" data-a="mail"><i class="bi bi-envelope"></i> Enviar correo</button>` : '';
+            const mailBtn = act !== 'call' && validEmail(p.email) ? `<button type="button" class="sima-ct-it" data-i="${i}" data-a="mail"><i class="bi bi-envelope"></i> ${esc(T('Enviar correo'))}</button>` : '';
             if (!p.phone) return `<div class="sima-ct-grp"><div class="sima-ct-who">${p.label ? '<b>' + esc(p.label) + '</b> ' : ''}<span>${esc(p.email)}</span></div>${mailBtn}</div>`;
             const btns = act === 'call' || !w
-                ? `<button type="button" class="sima-ct-it" data-i="${i}" data-a="call"><i class="bi bi-telephone"></i> Llamar</button>`
-                : `<button type="button" class="sima-ct-it" data-i="${i}" data-a="link"${w ? '' : ' disabled'}><i class="bi bi-chat-dots"></i> Escribir por Link</button>`
-                + `<button type="button" class="sima-ct-it" data-i="${i}" data-a="wa"${w ? '' : ' disabled'}><i class="bi bi-whatsapp"></i> Abrir en WhatsApp</button>`;
+                ? `<button type="button" class="sima-ct-it" data-i="${i}" data-a="call"><i class="bi bi-telephone"></i> ${esc(T('Llamar'))}</button>`
+                : (api.showLink !== false ? `<button type="button" class="sima-ct-it" data-i="${i}" data-a="link"${w ? '' : ' disabled'}><i class="bi bi-chat-dots"></i> ${esc(T('Escribir por Link'))}</button>` : '')
+                + `<button type="button" class="sima-ct-it" data-i="${i}" data-a="wa"${w ? '' : ' disabled'}><i class="bi bi-whatsapp"></i> ${esc(T('Abrir en WhatsApp'))}</button>`;
             return `<div class="sima-ct-grp"><div class="sima-ct-who">${p.label ? '<b>' + esc(p.label) + '</b> ' : ''}<span>${esc(p.phone)}</span></div>${btns}${mailBtn}</div>`;
         }).join('');
         const m = document.createElement('div');
@@ -119,7 +137,7 @@
             b.disabled = true;
             close();
             if (a === 'mail') mail(p.email);
-            else if (a === 'wa') openWA(p.phone);
+            else if (a === 'wa') await openWA(p.phone, p.label || o.name);
             else if (a === 'call') call(p.phone);
             else await link(p.phone, p.label || o.name);
         });
@@ -128,19 +146,19 @@
 
     function html(phone, name, wa, email) {
         const p = esc(phone || ''), n = esc(name || ''), w = wa === false || wa === 0 || wa === '0' ? ' data-ct-wa="0"' : '';
-        const m = validEmail(email) ? `<button type="button" class="sima-ct-btn" data-ct-act="mail" data-ct-email="${esc(String(email).trim())}" title="Enviar correo" aria-label="Enviar correo"><i class="bi bi-envelope"></i></button>` : '';
-        if (!phone && !m) return '<span class="sima-ct-none" title="Sin teléfono">—</span>';
+        const m = validEmail(email) ? `<button type="button" class="sima-ct-btn" data-ct-act="mail" data-ct-email="${esc(String(email).trim())}" title="${esc(T('Enviar correo'))}" aria-label="${esc(T('Enviar correo'))}"><i class="bi bi-envelope"></i></button>` : '';
+        if (!phone && !m) return `<span class="sima-ct-none" title="${esc(T('Sin teléfono'))}">—</span>`;
         if (!phone) return `<span class="sima-ct-btns">${m}</span>`;
         return `<span class="sima-ct-btns">`
-            + `<button type="button" class="sima-ct-btn" data-ct-act="write" data-ct-phone="${p}" data-ct-name="${n}"${w} title="Escribir" aria-label="Escribir"><i class="bi bi-whatsapp"></i></button>`
-            + `<button type="button" class="sima-ct-btn" data-ct-act="call" data-ct-phone="${p}" data-ct-name="${n}"${w} title="Llamar" aria-label="Llamar"><i class="bi bi-telephone"></i></button>${m}</span>`;
+            + `<button type="button" class="sima-ct-btn" data-ct-act="write" data-ct-phone="${p}" data-ct-name="${n}"${w} title="${esc(T('Escribir'))}" aria-label="${esc(T('Escribir'))}"><i class="bi bi-whatsapp"></i></button>`
+            + `<button type="button" class="sima-ct-btn" data-ct-act="call" data-ct-phone="${p}" data-ct-name="${n}"${w} title="${esc(T('Llamar'))}" aria-label="${esc(T('Llamar'))}"><i class="bi bi-telephone"></i></button>${m}</span>`;
     }
     // Botones cuyo teléfono se resuelve al pulsar (p. ej. el usuario principal de un consultorio).
     function htmlSrc(src, name) {
         const n = esc(name || ''), s = esc(src);
         return `<span class="sima-ct-btns">`
-            + `<button type="button" class="sima-ct-btn" data-ct-act="write" data-ct-src="${s}" data-ct-name="${n}" title="Escribir" aria-label="Escribir"><i class="bi bi-whatsapp"></i></button>`
-            + `<button type="button" class="sima-ct-btn" data-ct-act="call" data-ct-src="${s}" data-ct-name="${n}" title="Llamar" aria-label="Llamar"><i class="bi bi-telephone"></i></button></span>`;
+            + `<button type="button" class="sima-ct-btn" data-ct-act="write" data-ct-src="${s}" data-ct-name="${n}" title="${esc(T('Escribir'))}" aria-label="${esc(T('Escribir'))}"><i class="bi bi-whatsapp"></i></button>`
+            + `<button type="button" class="sima-ct-btn" data-ct-act="call" data-ct-src="${s}" data-ct-name="${n}" title="${esc(T('Llamar'))}" aria-label="${esc(T('Llamar'))}"><i class="bi bi-telephone"></i></button></span>`;
     }
 
     document.addEventListener('click', async e => {
@@ -154,16 +172,17 @@
             const [kind, id] = b.dataset.ctSrc.split(/:(.*)/s);
             const R = api.resolvers[kind]; if (!R) return;
             b.disabled = true;
-            try { phones = await R(id); } catch (err) { toast(err.message || 'No se pudo leer el contacto', 'error'); b.disabled = false; return; }
+            try { phones = await R(id); } catch (err) { toast(err.message || T('No se pudo leer el contacto'), 'error'); b.disabled = false; return; }
             b.disabled = false;
         } else phones = [{ label: name, phone: b.dataset.ctPhone, wa: b.dataset.ctWa === '0' ? 0 : undefined }];
         phones = (phones || []).filter(p => p && (p.phone || (act !== 'call' && validEmail(p.email))));
-        if (!phones.length) { toast('Sin teléfono registrado', 'warn'); return; }
+        if (!phones.length) { toast(T('Sin teléfono registrado'), 'warn'); return; }
         if (act === 'call' && phones.length === 1) { call(phones[0].phone); return; }
-        menu(b, { phones, act, name, title: act === 'call' ? 'Llamar a' : 'Escribir a' });
+        menu(b, { phones, act, name, title: act === 'call' ? T('Llamar a') : T('Escribir a') });
     }, true);
 
-    const api = { digits, valid, validEmail, openWA, call, mail, link, menu, close, html, htmlSrc, external, resolvers: {}, linkHandler: null };
+    const api = { digits, valid, validEmail, openWA, call, mail, link, menu, close, html, htmlSrc, external, resolvers: {}, linkHandler: null,
+        showLink: true, beforeWhatsApp: null, openExternal: null };
     window.CimaContact = api;
     window.sima.contact = api;   // alias de BASE (sus módulos llaman sima.contact)
 })();
