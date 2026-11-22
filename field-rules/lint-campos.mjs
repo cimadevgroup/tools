@@ -13,7 +13,7 @@ const repo = args[args.indexOf('--repo') + 1] || process.cwd();
 const staged = args.includes('--staged'), baseline = args.includes('--baseline');
 const CAT = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.url), 'utf8'));
 const TIPOS = new Set(CAT.lint.tipos_input), IDS = new Set(CAT.lint.ids);
-const SKIP = /(^|\/)(node_modules|vendor|\.wt|\.claude|www|public\/modules|dist)\/|\.min\.|(^|\/)(field_rules|field_format|role_fields|phone_input|date_field)\.m?js$/;
+const SKIP = /(^|\/)(node_modules|vendor|\.wt|\.claude|www|public\/modules|dist)\/|\.min\.|(^|\/)(field_rules|field_format|role_fields|phone_input|date_field|date_time_field)\.m?js$/;
 
 const git = (a) => execFileSync('git', ['-C', repo, ...a], { encoding: 'utf8', maxBuffer: 1 << 28 });
 const files = (staged ? git(['diff', '--cached', '--name-only', '--diff-filter=ACM']) : git(['ls-files'])).split('\n')
