@@ -15,3 +15,4 @@
 .sima-ct-it:disabled{opacity:.45;cursor:not-allowed}
 .sima-ct-it .bi{color:var(--accent)}
 .sima-ct-it[data-a="wa"] .bi{color:var(--success,#22c55e)}
+.sima-ct-btn[data-ct-act="mail"]:hover{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
