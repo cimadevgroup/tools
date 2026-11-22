@@ -69,7 +69,7 @@ for entry in "${REPOS[@]}"; do
   if git -C "$root" rev-parse >/dev/null 2>&1; then
     while IFS= read -r f; do
       case " $want " in *" $f "*) ;; *) note "FUERA DE LISTA $name/$f (copia no declarada en sync.sh)";; esac
-    done < <(git -C "$root" ls-files | grep -E '(^|/)(field_rules|field_format|role_fields|phone_input|date_field|date_time_field)\.m?js$')
+    done < <(git -C "$root" ls-files | { [ "$name" = cima-patient ] && grep -vE '^vc/' || cat; } | grep -E '(^|/)(field_rules|field_format|role_fields|phone_input|date_field|date_time_field)\.m?js$')   # cima-patient/vc/ = copia del BUILD de myvitalcase (su fuente es el repo myvitalcase, ya declarado arriba): no cuenta como copia suelta
   fi
   # bloque de CLAUDE.md
   cm="$root/CLAUDE.md"
