@@ -1,18 +1,28 @@
-/* Contacto único (de2884, fuente compartida tools/contact): botones por fila y menú flotante. Colores del tema activo (tokens --win-*, --accent, --success). */
+/* Contacto único (de2884, fuente compartida tools/contact): botones por fila y menú flotante.
+   Colores por tokens propios (--ct-*) con respaldo: primero los de ventana de BASE (--win-*), luego los de CIMA
+   (--text-main, --text-muted, --surface-bg, --glass-bg, --glass-border, --primary) y al final un valor neutro.
+   En BASE resuelven a lo mismo de siempre (--win-*); en CIMA toman su tema. */
+.sima-ct-btns,.sima-ct-menu,.sima-ct-none{
+  --ct-muted:var(--win-muted,var(--text-muted,#8a94a6));
+  --ct-text:var(--win-text-bright,var(--text-main,currentColor));
+  --ct-bg:var(--win-bg,var(--bg-card,var(--surface-bg,var(--glass-bg,#fff))));
+  --ct-border:var(--win-border,var(--border,var(--glass-border,rgba(127,127,127,.3))));
+  --ct-accent:var(--accent,var(--primary,#3b82f6));
+  --ct-ok:var(--success,#22c55e);
+}
 .sima-ct-btns{display:inline-flex;gap:2px;align-items:center;white-space:nowrap}
-.sima-ct-btn{width:26px;height:24px;border:0;background:transparent;color:var(--win-muted);border-radius:6px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:.85rem;font-family:inherit}
-.sima-ct-btn:hover{background:color-mix(in srgb,var(--success,#22c55e) 18%,transparent);color:var(--success,#22c55e)}
-.sima-ct-btn[data-ct-act="call"]:hover{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.sima-ct-btn{width:26px;height:24px;border:0;background:transparent;color:var(--ct-muted);border-radius:6px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:.85rem;font-family:inherit}
+.sima-ct-btn:hover{background:color-mix(in srgb,var(--ct-ok) 18%,transparent);color:var(--ct-ok)}
+.sima-ct-btn[data-ct-act="call"]:hover,.sima-ct-btn[data-ct-act="mail"]:hover{background:color-mix(in srgb,var(--ct-accent) 18%,transparent);color:var(--ct-accent)}
 .sima-ct-btn:disabled{opacity:.5;cursor:progress}
-.sima-ct-none{color:var(--win-muted)}
-.sima-ct-menu{position:fixed;z-index:100000;min-width:220px;max-width:min(320px,92vw);padding:6px;border-radius:10px;background:var(--win-bg,var(--bg-card));color:var(--win-text-bright,var(--text-main));border:1px solid var(--win-border,var(--border));box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:2px}
-.sima-ct-title{font-size:.72rem;color:var(--win-muted);padding:4px 8px}
+.sima-ct-none{color:var(--ct-muted)}
+.sima-ct-menu{position:fixed;z-index:100000;min-width:220px;max-width:min(320px,92vw);padding:6px;border-radius:10px;background:var(--ct-bg);color:var(--ct-text);border:1px solid var(--ct-border);box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:2px}
+.sima-ct-title{font-size:.72rem;color:var(--ct-muted);padding:4px 8px}
 .sima-ct-grp{display:flex;flex-direction:column;gap:1px}
-.sima-ct-grp+.sima-ct-grp{border-top:1px solid var(--win-border,var(--border));margin-top:4px;padding-top:4px}
-.sima-ct-who{font-size:.76rem;color:var(--win-muted);padding:3px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sima-ct-grp+.sima-ct-grp{border-top:1px solid var(--ct-border);margin-top:4px;padding-top:4px}
+.sima-ct-who{font-size:.76rem;color:var(--ct-muted);padding:3px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sima-ct-it{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:7px 8px;border-radius:7px;cursor:pointer;font:inherit;font-size:.84rem}
-.sima-ct-it:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.sima-ct-it:hover:not(:disabled){background:color-mix(in srgb,var(--ct-accent) 16%,transparent)}
 .sima-ct-it:disabled{opacity:.45;cursor:not-allowed}
-.sima-ct-it .bi{color:var(--accent)}
-.sima-ct-it[data-a="wa"] .bi{color:var(--success,#22c55e)}
-.sima-ct-btn[data-ct-act="mail"]:hover{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.sima-ct-it .bi{color:var(--ct-accent)}
+.sima-ct-it[data-a="wa"] .bi{color:var(--ct-ok)}
