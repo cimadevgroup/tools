@@ -53,6 +53,10 @@ por última vez, cuántos subió hoy y los últimos archivos.
 - launchd (`~/Library/LaunchAgents/com.modularmango.contenido-carpeta.plist`): cada 2 min y al cambiar la carpeta.
   El programa se copia a `~/Library/Application Support/contenido-carpeta/` (fuera de Documentos).
 - Registro: `~/Library/Logs/contenido-carpeta.log`.
+  Cada línea dice qué tan grave es: **OK** (subido o fallo resuelto) · **ESPERA** (archivo que aún se copia; sube en la
+  próxima pasada) · **PASAJERO** (red o BASE caídos un rato; se reintenta solo, no hay que hacer nada) · **ATENCIÓN** (no se
+  arregla solo: llave, ruta o carpeta) · **A REVISAR** (archivo movido a «revisar»). Un fallo se anota una sola vez y, cuando
+  BASE vuelve a responder, queda la línea «Resuelto».
 - API de BASE (`sima`), con la llave del agente (nunca se imprime; token de 1 h guardado en modo 600):
   `GET /admin/social/folder` → `POST /admin/social/upload/start` → `PUT …/part/:n` (50 MB) → `POST …/complete`
   → `GET /admin/social/posts/:id` (redes permitidas) → `POST /admin/social/posts/:id` (texto y destinos, sin fecha)

@@ -31,7 +31,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 
-VERSION = '1.0'
+VERSION = '1.1'
 API = os.environ.get('CONTENIDO_API', 'https://sima.cima-api.workers.dev')
 SESION = 'contenido-carpeta'
 HOME = os.path.expanduser('~')
@@ -46,9 +46,15 @@ QUIET_S = 60
 PING_EVERY_S = 3600
 
 
-def log(msg):
+# Cada línea del registro dice qué tan grave es (pedido de Miguel, 26 nov: «que no asuste»):
+#   OK         todo bien (subido, se resolvió un fallo)
+#   ESPERA     algo normal que se hace en la próxima pasada (un archivo que aún se copia)
+#   PASAJERO   fallo de red o de BASE que se reintenta solo cada 2 minutos; no hay que hacer nada
+#   ATENCIÓN   algo que no se arregla solo (llave, ruta, carpeta): alguien tiene que mirarlo
+#   A REVISAR  un archivo que no se pudo subir y pasó a la carpeta «revisar»
+def log(msg, clase='OK'):
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
-    line = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '  ' + msg
+    line = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '  ' + ('[%s] ' % clase).ljust(12) + msg
     with open(LOG, 'a', encoding='utf-8') as f:
         f.write(line + '\n')
     if sys.stdout.isatty():
@@ -81,6 +87,31 @@ class ApiError(Exception):
         self.status = status
 
 
+def clase_de(e):
+    """→ (clase, explicación corta) de un fallo al hablar con BASE."""
+    st = getattr(e, 'status', 0)
+    if st == -1:
+        return 'ATENCIÓN', 'falta la llave del agente en esta Mac'
+    if st == 0 or st >= 500 or st == 429:
+        return 'PASAJERO', 'se reintenta solo en 2 minutos; no hay que hacer nada'
+    if st in (401, 403):
+        return 'ATENCIÓN', 'la llave del agente no sirve: hay que revisarla en BASE'
+    if st == 404:
+        return 'ATENCIÓN', 'BASE no reconoce la ruta: hay que avisar al equipo'
+    return 'ATENCIÓN', 'BASE rechazó el pedido'
+
+
+def texto_red(err):
+    """Mensajes del sistema en inglés → español claro."""
+    t = str(err)
+    for k, v in (('timed out', 'BASE tardó demasiado en responder'), ('Name or service not known', 'sin internet'),
+                 ('nodename nor servname', 'sin internet'), ('Network is unreachable', 'sin internet'),
+                 ('Connection refused', 'BASE no respondió'), ('Connection reset', 'se cortó la conexión')):
+        if k.lower() in t.lower():
+            return v
+    return t[:160]
+
+
 # ── Acceso a BASE ──────────────────────────────────────────────────────────────────────────────────────────────────
 def agent_key():
     try:
@@ -91,7 +122,7 @@ def agent_key():
                     return m.group(1).strip().strip('"').strip("'")
     except FileNotFoundError:
         pass
-    raise ApiError(0, 'Falta la llave del agente en ~/.base-agente.env')
+    raise ApiError(-1, 'Falta la llave del agente en ~/.base-agente.env')
 
 
 def http(method, path, body=None, token=None, raw=None, timeout=60, headers=None):
@@ -117,7 +148,7 @@ def http(method, path, body=None, token=None, raw=None, timeout=60, headers=None
         txt = e.read().decode('utf-8', 'replace')
         status = e.code
     except Exception as e:   # sin internet, tiempo agotado…
-        raise ApiError(0, 'Sin conexión con BASE: ' + str(e)[:160])
+        raise ApiError(0, 'Sin conexión con BASE: ' + texto_red(e))
     try:
         d = json.loads(txt) if txt else {}
     except Exception:
@@ -374,8 +405,17 @@ def main():
     try:
         F = api.call('GET', '/admin/social/folder')
     except ApiError as e:
-        log('No pude leer la configuración de BASE: ' + str(e))
+        cl, por = clase_de(e)
+        if not state.get('fallo'):   # una sola línea por fallo, no una cada 2 minutos
+            log('No pude leer la configuración de BASE (%s): %s' % (por, e), cl)
+            state['fallo'] = {'desde': time.time(), 'clase': cl}
+            save_json(os.path.join(APP_DIR, 'estado.json'), state)
         return
+    if state.get('fallo'):
+        d = datetime.fromtimestamp(float(state['fallo'].get('desde') or time.time()))
+        mes = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][d.month - 1]
+        log('Resuelto: BASE volvió a responder; el fallo del %d %s a las %s ya pasó.' % (d.day, mes, d.strftime('%H:%M')))
+        state.pop('fallo', None)
     cfg, labels = F.get('folder') or {}, F.get('networks') or {}
     if os.environ.get('CONTENIDO_RUTA'):   # solo para pruebas: otra carpeta sin tocar la de BASE
         cfg['ruta'] = os.environ['CONTENIDO_RUTA']
@@ -386,7 +426,7 @@ def main():
             items = candidates(root, cfg)
         except Exception as e:
             items, error = [], 'No puedo abrir la carpeta %s: %s' % (cfg.get('ruta'), str(e)[:120])
-            log(error)
+            log(error, 'ATENCIÓN')
         vistos, nuevos_vistos, now = state.get('vistos', {}), {}, time.time()
         for path, sub in items:
             try:
@@ -397,9 +437,11 @@ def main():
             nuevos_vistos[path] = firma
             if vistos.get(path) != firma or now - stt.st_mtime < QUIET_S or stt.st_size == 0:
                 pasada['en_carpeta'] += 1   # aún se está copiando o exportando: la próxima pasada
+                if path not in vistos:
+                    log('Llegó %s: espera a que termine de copiarse y sube en la próxima pasada.' % os.path.relpath(path, root), 'ESPERA')
                 continue
             if sub and sub not in cfg['carpetas']:
-                log('«%s/» no tiene destinos en BASE: %s sube sin destino' % (sub, os.path.basename(path)))
+                log('«%s/» no tiene destinos en BASE: %s sube sin destino' % (sub, os.path.basename(path)), 'ATENCIÓN')
             try:
                 ev = handle(api, cfg, path, sub if sub in cfg['carpetas'] else '', labels)
                 pasada['subidos'] += 1
@@ -410,7 +452,8 @@ def main():
                 if e.status == 0 or e.status >= 500 or e.status in (401, 403, 429):
                     pasada['errores'] += 1
                     error = str(e)[:200]
-                    log('No se pudo subir %s (se reintenta): %s' % (os.path.basename(path), e))
+                    cl, por = clase_de(e)
+                    log('No se pudo subir %s (%s): %s' % (os.path.basename(path), por, e), cl)
                     if e.status == 0:
                         break   # sin conexión: no sigue con el resto
                 else:
@@ -427,7 +470,7 @@ def main():
                      'ruta': cfg.get('ruta'), 'pasada': pasada, 'eventos': eventos, 'error': error if cfg.get('activa', True) else 'Vigilancia apagada en BASE'})
             state['ping'] = time.time()
         except ApiError as e:
-            log('No pude avisar a BASE: ' + str(e))
+            log('No pude avisar a BASE (%s): %s' % (clase_de(e)[1], e), clase_de(e)[0])
     save_json(os.path.join(APP_DIR, 'estado.json'), state)
 
 
@@ -440,15 +483,15 @@ def revisar(root, path, sub, motivo, pasada, eventos):
     try:
         move_with_text(path, txt, os.path.join(root, 'revisar'))
     except OSError as e:
-        log('No pude mover %s a revisar: %s' % (path, e))
+        log('No pude mover %s a revisar: %s' % (path, e), 'ATENCIÓN')
     pasada['revisar'] += 1
     eventos.append({'nombre': os.path.basename(path), 'carpeta': sub or '', 'ok': False, 'nota': (motivo + ': pasó a «revisar»')[:200]})
-    log('A revisar %s: %s' % (os.path.basename(path), motivo))
+    log('A revisar %s: %s' % (os.path.basename(path), motivo), 'A REVISAR')
 
 
 if __name__ == '__main__':
     try:
         main()
     except Exception as e:   # nunca se cae en silencio: queda en el registro
-        log('Error inesperado: %r' % e)
+        log('Error inesperado (hay que avisar al equipo): %r' % e, 'ATENCIÓN')
         sys.exit(1)
